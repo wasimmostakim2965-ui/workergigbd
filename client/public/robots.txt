@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /earnings
+Disallow: /profile
+Disallow: /notifications
+
+Sitemap: https://workergigbd.com/sitemap.xml
