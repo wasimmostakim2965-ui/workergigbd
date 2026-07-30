@@ -14,7 +14,6 @@ import {
   DollarSign,
   Users,
   CheckCircle2,
-  Play,
   Globe,
   Briefcase,
   TrendingUp,
