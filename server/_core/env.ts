@@ -1,31 +1,31 @@
-// Load environment variables from .env file
-import "dotenv/config";
+# ===========================================
+# WorkerGigBD - Environment Variables
+# ===========================================
 
-export const ENV = {
-  // ─── Supabase PostgreSQL Database ───
-  databaseUrl: process.env.DATABASE_URL ?? "",
-  directUrl: process.env.DIRECT_URL ?? "",
-  
-  // ─── Supabase Auth ───
-  supabaseUrl: process.env.SUPABASE_URL ?? "",
-  supabasePublishableKey: process.env.SUPABASE_PUBLISHABLE_KEY ?? "",
-  supabaseSecretKey: process.env.SUPABASE_SECRET_KEY ?? "",
-  supabaseJwksUrl: process.env.SUPABASE_JWKS_URL ?? "",
-  
-  // ─── OAuth Settings ───
-  oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
-  appId: process.env.APP_ID ?? "workergigbd-app",
-  cookieSecret: process.env.COOKIE_SECRET ?? "workergigbd-cookie-secret-2024",
-  
-  // ─── FORGE API (Manus runtime service) ───
-  forgeApiUrl: process.env.FORGE_API_URL ?? "",
-  forgeApiKey: process.env.FORGE_API_KEY ?? "",
-  
-  // ─── Server Settings ───
-  port: parseInt(process.env.PORT ?? "3000"),
-  nodeEnv: process.env.NODE_ENV ?? "development",
-  useLocalDb: process.env.USE_LOCAL_DB === "true",
-  
-  // ─── Admin Settings ───
-  ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
-};
+# ─── Supabase PostgreSQL Database ───
+DATABASE_URL=postgresql://postgres.tsokfguhydwausvuaaiw:Wasim%40%23%24_%26-%2B%28%29%2F@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true
+DIRECT_URL=postgresql://postgres.tsokfguhydwausvuaaiw:Wasim%40%23%24_%26-%2B%28%29%2F@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres
+
+# ─── Supabase Auth ───
+SUPABASE_URL=https://tsokfguhydwausvuaaiw.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_hfgUFRLu1UrBd10ulCUgsA_po8qwPjw
+SUPABASE_SECRET_KEY=sb_secret_EEIePAqN1UrBd10ulCUgsAJzY9kGk7w
+SUPABASE_JWKS_URL=https://tsokfguhydwausvuaaiw.supabase.co/auth/v1/.well-known/jwks.json
+
+# ─── Server Settings ───
+PORT=3000
+NODE_ENV=development
+
+# ─── Database Mode ───
+USE_LOCAL_DB=false
+
+# ─── FORGE API ───
+FORGE_API_URL=https://api.example.com
+FORGE_API_KEY=your-forge-api-key-here
+
+# ─── App Settings ───
+APP_ID=workergigbd-app
+COOKIE_SECRET=workergigbd-cookie-secret-2024-secure-random-string
+
+# ─── Owner OpenID (Admin) ───
+OWNER_OPEN_ID=
