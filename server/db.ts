@@ -17,6 +17,9 @@ import { ENV } from './_core/env';
 // Check if we should use local database (fallback)
 const USE_LOCAL_DB = process.env.USE_LOCAL_DB === 'true' || !process.env.DATABASE_URL;
 
+console.log("[Database] USE_LOCAL_DB:", USE_LOCAL_DB);
+console.log("[Database] DATABASE_URL set:", !!process.env.DATABASE_URL);
+
 let _db: ReturnType<typeof drizzle> | null = null;
 let _localDb: typeof import('./local-db').default | null = null;
 
