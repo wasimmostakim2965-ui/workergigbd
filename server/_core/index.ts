@@ -9,6 +9,13 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 
+// Graceful fallback for missing env
+const { 
+  DATABASE_URL = "postgresql://demo:demo@localhost:5432/demo",
+  JWT_SECRET = "dev-secret-key-for-preview-only",
+  OAUTH_SERVER_URL = "",
+} = process.env as Record<string, string>;
+
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
     const server = net.createServer();
