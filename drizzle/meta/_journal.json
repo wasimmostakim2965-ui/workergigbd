@@ -8,6 +8,13 @@
       "when": 1785311623681,
       "tag": "0000_high_korg",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1785375636994,
+      "tag": "0001_fixed_thundra",
+      "breakpoints": true
     }
   ]
 }

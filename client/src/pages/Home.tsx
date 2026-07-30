@@ -5,7 +5,6 @@
  */
 import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { startLogin } from "@/const";
 import {
   ArrowRight,
   Zap,
@@ -30,19 +29,11 @@ export default function Home() {
   const [, setLocation] = useLocation();
 
   const handleGetStarted = () => {
-    if (isAuthenticated) {
-      setLocation("/dashboard");
-    } else {
-      startLogin();
-    }
+    setLocation(isAuthenticated ? "/dashboard" : "/register");
   };
 
   const handleLogin = () => {
-    if (isAuthenticated) {
-      setLocation("/dashboard");
-    } else {
-      startLogin();
-    }
+    setLocation(isAuthenticated ? "/dashboard" : "/login");
   };
 
   return (
@@ -418,16 +409,14 @@ export default function Home() {
               <h4 className="font-heading font-semibold text-white mb-4 text-sm">Links</h4>
               <ul className="space-y-2.5 text-sm text-white/50">
                 <li><a href="/about" className="hover:text-white transition-colors">About Us</a></li>
-                <li><a href="#how-it-works" className="hover:text-white transition-colors">How It Works</a></li>
-                <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Blog</a></li>
+                <li><a href="/#how-it-works" className="hover:text-white transition-colors">How It Works</a></li>
+                <li><a href="/#features" className="hover:text-white transition-colors">Features</a></li>
               </ul>
             </div>
             <div>
               <h4 className="font-heading font-semibold text-white mb-4 text-sm">Help</h4>
               <ul className="space-y-2.5 text-sm text-white/50">
-                <li><a href="#" className="hover:text-white transition-colors">FAQ</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Contact</a></li>
+                <li><a href="mailto:support@workergigbd.com" className="hover:text-white transition-colors">Contact</a></li>
                 <li><a href="/terms" className="hover:text-white transition-colors">Terms & Conditions</a></li>
                 <li><a href="/privacy" className="hover:text-white transition-colors">Privacy Policy</a></li>
               </ul>
@@ -448,7 +437,7 @@ export default function Home() {
             <div className="flex items-center gap-4 text-xs text-white/40">
               <a href="/terms" className="hover:text-white transition-colors">Terms</a>
               <a href="/privacy" className="hover:text-white transition-colors">Privacy</a>
-              <a href="#" className="hover:text-white transition-colors">Cookie Policy</a>
+              <a href="/privacy" className="hover:text-white transition-colors">Cookie Policy</a>
             </div>
           </div>
         </div>

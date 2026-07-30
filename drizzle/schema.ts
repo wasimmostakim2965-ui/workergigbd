@@ -8,10 +8,17 @@ import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal } from "d
 export const users = mysqlTable("users", {
   /** Surrogate primary key. Auto-incremented numeric value managed by the database. */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
+  /** Session identity key. For email/password accounts this is a random UUID minted at registration (not a Manus openId anymore). Unique per user. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
-  email: varchar("email", { length: 320 }),
+  email: varchar("email", { length: 320 }).unique(),
+  /** bcrypt hash of the user's password. Null only for legacy OAuth-only accounts. */
+  passwordHash: varchar("passwordHash", { length: 255 }),
+  /** 1 once the user has clicked their email verification link. Required before withdrawals are allowed. */
+  emailVerified: int("emailVerified").default(0).notNull(),
+  /** Pending email verification token (random, single-use). Cleared once verified. */
+  emailVerifyToken: varchar("emailVerifyToken", { length: 128 }),
+  emailVerifyTokenExpiresAt: timestamp("emailVerifyTokenExpiresAt"),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
   /** Phone number for payment (Bkash/Nagad/Rocket) */

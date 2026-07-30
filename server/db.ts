@@ -98,6 +98,75 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+export async function getUserByEmail(email: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.email, email.toLowerCase())).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+/** Creates a brand-new email/password account. Throws if the email is already registered. */
+export async function createEmailUser(data: {
+  openId: string;
+  name: string;
+  email: string;
+  passwordHash: string;
+  role?: "user" | "admin";
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const existing = await getUserByEmail(data.email);
+  if (existing) {
+    throw new Error("EMAIL_TAKEN");
+  }
+
+  await db.insert(users).values({
+    openId: data.openId,
+    name: data.name,
+    email: data.email.toLowerCase(),
+    passwordHash: data.passwordHash,
+    loginMethod: "email",
+    role: data.role ?? "user",
+    emailVerified: 0,
+    lastSignedIn: new Date(),
+  });
+
+  return getUserByEmail(data.email);
+}
+
+export async function setEmailVerifyToken(userId: number, token: string, expiresAt: Date) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({
+    emailVerifyToken: token,
+    emailVerifyTokenExpiresAt: expiresAt,
+  }).where(eq(users.id, userId));
+}
+
+export async function verifyEmailByToken(token: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(users).where(eq(users.emailVerifyToken, token)).limit(1);
+  const user = result[0];
+  if (!user) return null;
+  if (!user.emailVerifyTokenExpiresAt || user.emailVerifyTokenExpiresAt.getTime() < Date.now()) {
+    return null;
+  }
+  await db.update(users).set({
+    emailVerified: 1,
+    emailVerifyToken: null,
+    emailVerifyTokenExpiresAt: null,
+  }).where(eq(users.id, user.id));
+  return user;
+}
+
+export async function touchLastSignedIn(userId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.id, userId));
+}
+
 export async function getAllUsers() {
   const db = await getDb();
   if (!db) return [];

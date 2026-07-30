@@ -8,6 +8,9 @@ import Home from "./pages/Home";
 import AboutPage from "./pages/AboutPage";
 import PrivacyPage from "./pages/PrivacyPage";
 import TermsPage from "./pages/TermsPage";
+import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
+import VerifyEmailPage from "./pages/VerifyEmailPage";
 import JobsPage from "./pages/JobsPage";
 import EarningsPage from "./pages/EarningsPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -29,6 +32,9 @@ function Router() {
       <Route path={"/about"} component={AboutPage} />
       <Route path={"/privacy"} component={PrivacyPage} />
       <Route path={"/terms"} component={TermsPage} />
+      <Route path={"/login"} component={LoginPage} />
+      <Route path={"/register"} component={RegisterPage} />
+      <Route path={"/verify-email"} component={VerifyEmailPage} />
 
       {/* User Dashboard */}
       <Route path={"/dashboard"} component={() => <DashboardLayout><JobsPage /></DashboardLayout>} />

@@ -1,5 +1,7 @@
 import { COOKIE_NAME } from "@shared/const";
+import { TRPCError } from "@trpc/server";
 import { getSessionCookieOptions } from "./_core/cookies";
+import { createEmailAccountAndSession, loginWithEmail } from "./_core/emailAuth";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
 import { z } from "zod";
@@ -14,6 +16,66 @@ export const appRouter = router({
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
+    }),
+
+    // ── Email/password auth ──────────────────────────────────────────────
+    // No confirmation code at signup — the user lands straight in the
+    // dashboard. Verification is only required later, right before they can
+    // submit a withdrawal (see earnings.withdraw below).
+    register: publicProcedure.input(z.object({
+      name: z.string().min(2, "Name is too short"),
+      email: z.string().email("Invalid email address"),
+      password: z.string().min(8, "Password must be at least 8 characters"),
+    })).mutation(async ({ input, ctx }) => {
+      try {
+        const user = await createEmailAccountAndSession(ctx.req, ctx.res, input);
+        return { success: true, user };
+      } catch (error: any) {
+        if (error?.message === "EMAIL_TAKEN") {
+          throw new TRPCError({ code: "CONFLICT", message: "This email is already registered" });
+        }
+        if (error?.message === "WEAK_PASSWORD") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Password must be at least 8 characters" });
+        }
+        console.error("[Auth] register failed:", error);
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Could not create account" });
+      }
+    }),
+
+    login: publicProcedure.input(z.object({
+      email: z.string().email(),
+      password: z.string().min(1),
+    })).mutation(async ({ input, ctx }) => {
+      try {
+        const user = await loginWithEmail(ctx.req, ctx.res, input);
+        return { success: true, user };
+      } catch (error: any) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
+      }
+    }),
+
+    verifyEmail: publicProcedure.input(z.object({
+      token: z.string().min(1),
+    })).mutation(async ({ input }) => {
+      const user = await db.verifyEmailByToken(input.token);
+      if (!user) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "This verification link is invalid or has expired" });
+      }
+      return { success: true } as const;
+    }),
+
+    resendVerification: protectedProcedure.mutation(async ({ ctx }) => {
+      if (ctx.user.emailVerified) {
+        return { success: true, alreadyVerified: true } as const;
+      }
+      if (!ctx.user.email) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "No email on this account" });
+      }
+      const { generateEmailVerifyToken, sendVerificationEmail } = await import("./_core/emailAuth");
+      const token = generateEmailVerifyToken();
+      await db.setEmailVerifyToken(ctx.user.id, token, new Date(Date.now() + 1000 * 60 * 60 * 24));
+      await sendVerificationEmail(ctx.user.email, token);
+      return { success: true, alreadyVerified: false } as const;
     }),
   }),
 
@@ -116,6 +178,12 @@ export const appRouter = router({
       paymentMethod: z.string().min(1),
       paymentNumber: z.string().min(1),
     })).mutation(async ({ input, ctx }) => {
+      if (!ctx.user.emailVerified) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Please verify your email before requesting a withdrawal",
+        });
+      }
       await db.createWithdrawalRequest({
         userId: ctx.user.id,
         amount: String(input.amount),
