@@ -332,6 +332,23 @@ export async function addEarningRecord(earning: InsertEarning) {
   const db = await getDb();
   if (!db) return null;
   const result = await db.insert(earnings).values(earning);
+  
+  // Send notification for completed earning
+  if (earning.status === "completed") {
+    await createNotification({
+      userId: earning.userId,
+      title: "Job Completed",
+      message: `Congratulations! You earned ৳${earning.amount} for completing a job.`,
+      type: "earning",
+    });
+    
+    await logActivity({
+      userId: earning.userId,
+      action: "JOB_COMPLETED",
+      details: `Earned ৳${earning.amount} from job #${earning.jobId}`,
+    });
+  }
+  
   return result;
 }
 
@@ -379,11 +396,54 @@ export async function createWithdrawalRequest(req: InsertWithdrawalRequest) {
 export async function updateWithdrawalStatus(id: number, status: "pending" | "approved" | "rejected" | "processed", adminNote?: string) {
   const db = await getDb();
   if (!db) return;
+  
+  // Get withdrawal info first
+  const withdrawalResult = await db.select().from(withdrawalRequests).where(eq(withdrawalRequests.id, id)).limit(1);
+  const withdrawal = withdrawalResult[0];
+  
   await db.update(withdrawalRequests).set({
     status,
     adminNote: adminNote || null,
     processedAt: new Date(),
   }).where(eq(withdrawalRequests.id, id));
+  
+  // Send notification if withdrawal was approved
+  if (withdrawal && (status === "approved" || status === "processed")) {
+    await createNotification({
+      userId: withdrawal.userId,
+      title: "Withdrawal Approved",
+      message: `Your withdrawal request of ৳${withdrawal.amount} has been approved. Payment will be sent to ${withdrawal.paymentNumber} via ${withdrawal.paymentMethod}.`,
+      type: "payment",
+    });
+    
+    // Deduct from user earning balance
+    await db.insert(userBalances).values({
+      userId: withdrawal.userId,
+      earning: String(-Number(withdrawal.amount)),
+    }).onConflictDoUpdate({
+      target: userBalances.userId,
+      set: { earning: sql`${userBalances.earning} - ${withdrawal.amount}` },
+    });
+    
+    await logActivity({
+      userId: withdrawal.userId,
+      action: "WITHDRAWAL_APPROVED",
+      details: `Withdrawal of ৳${withdrawal.amount} approved via ${withdrawal.paymentMethod}`,
+    });
+  } else if (withdrawal && status === "rejected") {
+    await createNotification({
+      userId: withdrawal.userId,
+      title: "Withdrawal Rejected",
+      message: `Your withdrawal request of ৳${withdrawal.amount} has been rejected. ${adminNote ? `Reason: ${adminNote}` : ""}`,
+      type: "payment",
+    });
+    
+    await logActivity({
+      userId: withdrawal.userId,
+      action: "WITHDRAWAL_REJECTED",
+      details: `Withdrawal of ৳${withdrawal.amount} rejected. Reason: ${adminNote || "No reason provided"}`,
+    });
+  }
 }
 
 // ─── Notifications ───────────────────────────────────────────────────────────
@@ -673,6 +733,14 @@ export async function addUserReview(review: InsertUserReview) {
     totalRatings: allReviews.length,
   }).where(eq(users.id, review.toUserId));
   
+  // Send notification
+  await createNotification({
+    userId: review.toUserId,
+    title: "New Review Received",
+    message: `You received a ${review.rating}-star review: "${review.comment || "No comment"}"`,
+    type: "earning",
+  });
+  
   return result;
 }
 
@@ -943,6 +1011,10 @@ export async function respondToSupportMessage(id: number, response: string, resp
   const db = await getDb();
   if (!db) return;
   
+  // Get message info for notification
+  const messageResult = await db.select().from(supportMessages).where(eq(supportMessages.id, id)).limit(1);
+  const message = messageResult[0];
+  
   await db.update(supportMessages)
     .set({
       adminResponse: response,
@@ -951,4 +1023,20 @@ export async function respondToSupportMessage(id: number, response: string, resp
       status: status || "responded",
     })
     .where(eq(supportMessages.id, id));
+  
+  // Send notification to user
+  if (message) {
+    await createNotification({
+      userId: message.userId,
+      title: "Support Reply",
+      message: `Your support message has been replied: "${response}"`,
+      type: "info",
+    });
+    
+    await logActivity({
+      userId: message.userId,
+      action: "SUPPORT_REPLY",
+      details: `Admin replied to support ticket #${id}: ${response.substring(0, 50)}...`,
+    });
+  }
 }
