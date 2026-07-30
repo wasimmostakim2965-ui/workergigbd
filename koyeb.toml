@@ -1,0 +1,14 @@
+name = "workergigbd"
+github = "wasimmostakim2965-ui/workergigbd"
+build_command = "npm run build"
+start_command = "npm run start"
+health_check_path = "/"
+instances = 1
+region = "fra"
+
+[ports]
+  port = 3000
+  protocol = "http"
+
+[env]
+  NODE_ENV = "production"
