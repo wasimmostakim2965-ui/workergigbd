@@ -13,9 +13,14 @@ export { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 // with "invalid oauth state". It returns void by design, so there is no URL to
 // stash across renders.
 export const startLogin = () => {
-  const oauthPortalUrl = import.meta.env.VITE_OAUTH_PORTAL_URL;
-  const appId = import.meta.env.VITE_APP_ID;
+  const oauthPortalUrl = import.meta.env.VITE_OAUTH_PORTAL_URL ?? "";
+  const appId = import.meta.env.VITE_APP_ID ?? "workergigbd";
   const redirectUri = `${window.location.origin}/api/oauth/callback`;
+
+  if (!oauthPortalUrl) {
+    console.warn("OAuth not configured - VITE_OAUTH_PORTAL_URL not set");
+    return;
+  }
 
   const nonce = crypto.randomUUID();
   document.cookie = `${OAUTH_STATE_COOKIE}=${nonce}; Path=/; Max-Age=600; SameSite=None; Secure`;

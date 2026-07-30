@@ -11,8 +11,8 @@ import { serveStatic, setupVite } from "./vite";
 
 // Graceful fallback for missing env
 const { 
-  DATABASE_URL = "postgresql://demo:demo@localhost:5432/demo",
-  JWT_SECRET = "dev-secret-key-for-preview-only",
+  DATABASE_URL = "postgresql://postgres:Wasim@#$_&-+()/@db.tsokfguhydwausvuaaiw.supabase.co:5432/postgres",
+  JWT_SECRET = "workergigbd-jwt-secret-2024-secure-key-32chars",
   OAUTH_SERVER_URL = "",
 } = process.env as Record<string, string>;
 

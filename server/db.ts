@@ -18,10 +18,11 @@ let _db: ReturnType<typeof drizzle> | null = null;
 // Supabase's pooler requires SSL; `sslmode=require` in the connection string
 // also works, but this makes it explicit even if that's omitted.
 export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
+  const dbUrl = process.env.DATABASE_URL || ENV.databaseUrl;
+  if (!_db && dbUrl) {
     try {
       const pool = new Pool({
-        connectionString: process.env.DATABASE_URL,
+        connectionString: dbUrl,
         ssl: { rejectUnauthorized: false },
       });
       _db = drizzle(pool);
