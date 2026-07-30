@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Wallet, CheckCircle, XCircle, Clock, Search, Filter, RefreshCw, Phone, CreditCard, User, AlertCircle } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Wallet, CheckCircle, XCircle, Clock, Search, RefreshCw, Phone, CreditCard, User, AlertCircle, FileText } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -10,22 +10,24 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
-export default function AdminWithdrawals() {
+export default function AdminDeposits() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "rejected" | "processed">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
   const [showApproveDialog, setShowApproveDialog] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [adminNote, setAdminNote] = useState("");
+  const [transactionId, setTransactionId] = useState("");
+  const [amount, setAmount] = useState("");
 
   const utils = trpc.useUtils();
 
-  const { data: withdrawals, isLoading, refetch } = trpc.admin.withdrawals.useQuery();
+  const { data: deposits, isLoading, refetch } = trpc.admin.deposits.useQuery();
 
-  const updateMutation = trpc.admin.updateWithdrawal.useMutation({
+  const updateMutation = trpc.admin.updateDeposit.useMutation({
     onSuccess: () => {
-      toast.success("Withdrawal updated!");
-      utils.admin.withdrawals.invalidate();
+      toast.success("Deposit updated!");
+      utils.admin.deposits.invalidate();
       setShowApproveDialog(false);
       setShowRejectDialog(false);
       setAdminNote("");
@@ -48,8 +50,6 @@ export default function AdminWithdrawals() {
         return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300"><CheckCircle className="h-3 w-3 mr-1" /> Approved</Badge>;
       case 'rejected':
         return <Badge className="bg-red-100 text-red-700 border-red-300"><XCircle className="h-3 w-3 mr-1" /> Rejected</Badge>;
-      case 'processed':
-        return <Badge className="bg-blue-100 text-blue-700 border-blue-300"><CheckCircle className="h-3 w-3 mr-1" /> Processed</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -65,18 +65,16 @@ export default function AdminWithdrawals() {
     return <Badge className={colors[method] || "bg-gray-100 text-gray-700"}>{method}</Badge>;
   };
 
-  // Filter withdrawals
-  const filteredWithdrawals = (withdrawals || []).filter((w: any) => {
-    if (statusFilter !== "all" && w.status !== statusFilter) return false;
+  // Filter deposits
+  const filteredDeposits = (deposits || []).filter((d: any) => {
+    if (statusFilter !== "all" && d.status !== statusFilter) return false;
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      const userInfo = w.userInfo || {};
       return (
-        userInfo.name?.toLowerCase().includes(query) ||
-        userInfo.email?.toLowerCase().includes(query) ||
-        userInfo.userId?.includes(searchQuery) ||
-        w.paymentNumber?.includes(searchQuery) ||
-        String(w.userId).includes(searchQuery)
+        d.userName?.toLowerCase().includes(query) ||
+        d.userEmail?.toLowerCase().includes(query) ||
+        d.transactionId?.toLowerCase().includes(query) ||
+        String(d.userId).includes(searchQuery)
       );
     }
     return true;
@@ -84,14 +82,20 @@ export default function AdminWithdrawals() {
 
   // Stats
   const stats = {
-    total: (withdrawals || []).length,
-    pending: (withdrawals || []).filter((w: any) => w.status === 'pending').length,
-    approved: (withdrawals || []).filter((w: any) => w.status === 'approved' || w.status === 'processed').length,
-    rejected: (withdrawals || []).filter((w: any) => w.status === 'rejected').length,
-    pendingAmount: (withdrawals || [])
-      .filter((w: any) => w.status === 'pending')
-      .reduce((sum: number, w: any) => sum + Number(w.amount), 0)
+    total: (deposits || []).length,
+    pending: (deposits || []).filter((d: any) => d.status === 'pending').length,
+    approved: (deposits || []).filter((d: any) => d.status === 'approved').length,
+    rejected: (deposits || []).filter((d: any) => d.status === 'rejected').length,
+    pendingAmount: (deposits || [])
+      .filter((d: any) => d.status === 'pending')
+      .reduce((sum: number, d: any) => sum + Number(d.amount), 0),
+    totalAmount: (deposits || [])
+      .filter((d: any) => d.status === 'approved')
+      .reduce((sum: number, d: any) => sum + Number(d.amount), 0)
   };
+
+  // Admin bKash number
+  const ADMIN_BKASH = "01338882758";
 
   const handleApprove = () => {
     if (selectedRequest) {
@@ -118,13 +122,17 @@ export default function AdminWithdrawals() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="font-heading text-2xl font-bold text-foreground">Withdrawal Requests</h1>
-          <p className="text-muted-foreground text-sm mt-1">Review and process user withdrawals</p>
+          <h1 className="font-heading text-2xl font-bold text-foreground">Deposit Requests</h1>
+          <p className="text-muted-foreground text-sm mt-1">Review and process user deposit requests</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          <RefreshCw className="h-4 w-4 mr-1" />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Admin bKash:</span>
+          <span className="font-mono font-bold text-primary">{ADMIN_BKASH}</span>
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
+            <RefreshCw className="h-4 w-4 mr-1" />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -166,7 +174,7 @@ export default function AdminWithdrawals() {
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by User ID, Name, Email, Phone, Number..."
+            placeholder="Search by User, Transaction ID..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
@@ -199,12 +207,12 @@ export default function AdminWithdrawals() {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-8 text-center">Loading...</div>
-          ) : filteredWithdrawals.length === 0 ? (
+          ) : filteredDeposits.length === 0 ? (
             <div className="p-8 text-center">
               <Wallet className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
-              <p className="text-muted-foreground text-lg">No withdrawal requests</p>
+              <p className="text-muted-foreground text-lg">No deposit requests</p>
               <p className="text-sm text-muted-foreground/60 mt-2">
-                {searchQuery ? "Try a different search term" : "No withdrawal requests found"}
+                {searchQuery ? "Try a different search term" : "No deposit requests found"}
               </p>
             </div>
           ) : (
@@ -213,41 +221,46 @@ export default function AdminWithdrawals() {
                 <thead className="bg-muted/50 sticky top-0">
                   <tr>
                     <th className="text-left py-3 px-4 font-medium text-muted-foreground">User</th>
+                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Transaction ID</th>
                     <th className="text-left py-3 px-4 font-medium text-muted-foreground">Amount</th>
                     <th className="text-left py-3 px-4 font-medium text-muted-foreground">Method</th>
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Phone Number</th>
                     <th className="text-left py-3 px-4 font-medium text-muted-foreground">Status</th>
                     <th className="text-left py-3 px-4 font-medium text-muted-foreground">Date</th>
                     <th className="text-left py-3 px-4 font-medium text-muted-foreground">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {filteredWithdrawals.map((w: any) => (
-                    <tr key={w.id} className="hover:bg-muted/30">
+                  {filteredDeposits.map((d: any) => (
+                    <tr key={d.id} className="hover:bg-muted/30">
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-xs">
-                            {w.userInfo?.name?.charAt(0).toUpperCase() || "U"}
+                            {d.userName?.charAt(0).toUpperCase() || "U"}
                           </div>
                           <div>
-                            <p className="font-medium">{w.userInfo?.name || "Unknown"}</p>
-                            <p className="text-xs text-muted-foreground font-mono">ID: {w.userInfo?.userId || w.userId}</p>
+                            <p className="font-medium">{d.userName || "Unknown"}</p>
+                            <p className="text-xs text-muted-foreground font-mono">ID: {d.userId}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="py-3 px-4 font-bold text-emerald-600">{formatCurrency(w.amount)}</td>
-                      <td className="py-3 px-4">{getMethodBadge(w.paymentMethod)}</td>
-                      <td className="py-3 px-4 font-mono text-xs">{w.paymentNumber}</td>
-                      <td className="py-3 px-4">{getStatusBadge(w.status)}</td>
-                      <td className="py-3 px-4 text-muted-foreground text-xs">{format(new Date(w.createdAt), 'PP p')}</td>
                       <td className="py-3 px-4">
-                        {w.status === 'pending' && (
+                        <div className="flex items-center gap-1">
+                          <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="font-mono text-xs">{d.transactionId || "N/A"}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 font-bold text-emerald-600">{formatCurrency(d.amount)}</td>
+                      <td className="py-3 px-4">{getMethodBadge(d.paymentMethod)}</td>
+                      <td className="py-3 px-4">{getStatusBadge(d.status)}</td>
+                      <td className="py-3 px-4 text-muted-foreground text-xs">{format(new Date(d.createdAt), 'PP p')}</td>
+                      <td className="py-3 px-4">
+                        {d.status === 'pending' && (
                           <div className="flex gap-2">
                             <Button
                               size="sm"
                               className="bg-emerald-500 hover:bg-emerald-600"
                               onClick={() => {
-                                setSelectedRequest(w);
+                                setSelectedRequest(d);
                                 setShowApproveDialog(true);
                               }}
                             >
@@ -257,7 +270,7 @@ export default function AdminWithdrawals() {
                               size="sm"
                               variant="destructive"
                               onClick={() => {
-                                setSelectedRequest(w);
+                                setSelectedRequest(d);
                                 setShowRejectDialog(true);
                               }}
                             >
@@ -265,9 +278,9 @@ export default function AdminWithdrawals() {
                             </Button>
                           </div>
                         )}
-                        {w.status !== 'pending' && (
+                        {d.status !== 'pending' && (
                           <span className="text-xs text-muted-foreground">
-                            {w.adminNote ? w.adminNote : "Completed"}
+                            {d.note ? d.note : "Completed"}
                           </span>
                         )}
                       </td>
@@ -280,12 +293,28 @@ export default function AdminWithdrawals() {
         </CardContent>
       </Card>
 
+      {/* Info Card */}
+      <Card className="bg-blue-50 border-blue-200">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3">
+            <CreditCard className="h-5 w-5 text-blue-600 mt-0.5" />
+            <div>
+              <p className="font-medium text-blue-800">Deposit Information</p>
+              <p className="text-sm text-blue-700 mt-1">
+                <strong>Admin bKash Number:</strong> {ADMIN_BKASH}<br/>
+                Users should send money to this number and provide the transaction ID when requesting a deposit.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Approve Dialog */}
       <Dialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-emerald-600">
-              <CheckCircle className="h-5 w-5" /> Approve Withdrawal
+              <CheckCircle className="h-5 w-5" /> Approve Deposit
             </DialogTitle>
           </DialogHeader>
           {selectedRequest && (
@@ -294,23 +323,19 @@ export default function AdminWithdrawals() {
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <p className="text-muted-foreground">User</p>
-                    <p className="font-medium">{selectedRequest.userInfo?.name || "Unknown"}</p>
+                    <p className="font-medium">{selectedRequest.userName || "Unknown"}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">User ID</p>
-                    <p className="font-mono font-medium">{selectedRequest.userInfo?.userId || selectedRequest.userId}</p>
+                    <p className="font-mono font-medium">{selectedRequest.userId}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Amount</p>
                     <p className="font-bold text-emerald-600 text-lg">{formatCurrency(selectedRequest.amount)}</p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Payment Method</p>
-                    <p className="font-medium capitalize">{selectedRequest.paymentMethod}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Phone Number</p>
-                    <p className="font-mono">{selectedRequest.paymentNumber}</p>
+                    <p className="text-muted-foreground">Transaction ID</p>
+                    <p className="font-mono">{selectedRequest.transactionId || "N/A"}</p>
                   </div>
                 </div>
               </div>
@@ -332,7 +357,7 @@ export default function AdminWithdrawals() {
               onClick={handleApprove}
               disabled={updateMutation.isPending}
             >
-              {updateMutation.isPending ? "Processing..." : "Approve Withdrawal"}
+              {updateMutation.isPending ? "Processing..." : "Approve Deposit"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -343,7 +368,7 @@ export default function AdminWithdrawals() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
-              <XCircle className="h-5 w-5" /> Reject Withdrawal
+              <XCircle className="h-5 w-5" /> Reject Deposit
             </DialogTitle>
           </DialogHeader>
           {selectedRequest && (
@@ -351,12 +376,12 @@ export default function AdminWithdrawals() {
               <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                 <div className="flex items-center gap-2 text-red-700 mb-2">
                   <AlertCircle className="h-5 w-5" />
-                  <p className="font-medium">Are you sure you want to reject this withdrawal?</p>
+                  <p className="font-medium">Are you sure you want to reject this deposit?</p>
                 </div>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <p className="text-muted-foreground">User</p>
-                    <p className="font-medium">{selectedRequest.userInfo?.name || "Unknown"}</p>
+                    <p className="font-medium">{selectedRequest.userName || "Unknown"}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Amount</p>
@@ -382,7 +407,7 @@ export default function AdminWithdrawals() {
               onClick={handleReject}
               disabled={updateMutation.isPending}
             >
-              {updateMutation.isPending ? "Processing..." : "Reject Withdrawal"}
+              {updateMutation.isPending ? "Processing..." : "Reject Deposit"}
             </Button>
           </DialogFooter>
         </DialogContent>

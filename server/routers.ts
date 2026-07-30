@@ -314,6 +314,17 @@ export const appRouter = router({
       return { success: true };
     }),
 
+    updateUser: adminProcedure.input(z.object({
+      userId: z.number(),
+      name: z.string().optional(),
+      email: z.string().email().optional(),
+      phone: z.string().optional(),
+    })).mutation(async ({ input }) => {
+      const { userId, ...data } = input;
+      await db.updateUser(userId, data);
+      return { success: true };
+    }),
+
     // Withdrawals
     withdrawals: adminProcedure.query(async () => {
       return db.getWithdrawalRequests();
@@ -331,6 +342,15 @@ export const appRouter = router({
     // Deposits
     deposits: adminProcedure.query(async () => {
       return db.getAllDeposits();
+    }),
+
+    updateDeposit: adminProcedure.input(z.object({
+      id: z.number(),
+      status: z.enum(["pending", "approved", "rejected"]),
+      adminNote: z.string().optional(),
+    })).mutation(async ({ input }) => {
+      await db.updateDepositStatus(input.id, input.status, input.adminNote);
+      return { success: true };
     }),
 
     // Notifications (admin sends to users)

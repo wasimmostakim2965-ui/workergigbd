@@ -231,6 +231,23 @@ export async function updateUserRole(userId: number, role: "user" | "admin") {
   await db.update(users).set({ role }).where(eq(users.id, userId));
 }
 
+export async function updateUser(userId: number, data: {
+  name?: string;
+  email?: string;
+  phone?: string;
+}) {
+  const db = await getDb();
+  if (!db) return;
+  
+  const updateData: Record<string, any> = {};
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.email !== undefined) updateData.email = data.email;
+  if (data.phone !== undefined) updateData.phone = data.phone;
+  updateData.updatedAt = new Date();
+  
+  await db.update(users).set(updateData).where(eq(users.id, userId));
+}
+
 // ─── User Balances ───────────────────────────────────────────────────────────
 
 export async function getUserBalance(userId: number) {
@@ -323,7 +340,27 @@ export async function addEarningRecord(earning: InsertEarning) {
 export async function getWithdrawalRequests() {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(withdrawalRequests).orderBy(desc(withdrawalRequests.createdAt));
+  
+  // Get all withdrawals with user info
+  const result = await db
+    .select({
+      withdrawal: withdrawalRequests,
+      user: {
+        userId: users.userId,
+        name: users.name,
+        email: users.email,
+        phone: users.phone,
+      }
+    })
+    .from(withdrawalRequests)
+    .leftJoin(users, eq(withdrawalRequests.userId, users.id))
+    .orderBy(desc(withdrawalRequests.createdAt));
+  
+  // Transform to include user info
+  return result.map(row => ({
+    ...row.withdrawal,
+    userInfo: row.user
+  }));
 }
 
 export async function getUserWithdrawals(userId: number) {
@@ -744,6 +781,18 @@ export async function getUserDepositList(userId: number) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(deposits).where(eq(deposits.userId, userId)).orderBy(desc(deposits.createdAt));
+}
+
+export async function updateDepositStatus(id: number, status: "pending" | "approved" | "rejected", adminNote?: string) {
+  const db = await getDb();
+  if (!db) return;
+  
+  await db.update(deposits)
+    .set({ 
+      status,
+      note: adminNote || undefined,
+    })
+    .where(eq(deposits.id, id));
 }
 
 // ─── Support Messages ─────────────────────────────────────────────────────────

@@ -29,6 +29,8 @@ import {
   Lock,
   Eye,
   EyeOff,
+  CreditCard,
+  MessageCircle,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { Button } from "./ui/button";
@@ -44,6 +46,7 @@ const adminMenuItems = [
   { icon: Users, label: "Users", path: "/admin/users" },
   { icon: Briefcase, label: "Jobs", path: "/admin/jobs" },
   { icon: Wallet, label: "Withdrawals", path: "/admin/withdrawals" },
+  { icon: CreditCard, label: "Deposits", path: "/admin/deposits" },
   { icon: Bell, label: "Notifications", path: "/admin/notifications" },
   { icon: FileText, label: "Activity Logs", path: "/admin/logs" },
   { icon: MessageCircle, label: "Support", path: "/admin/support" },
