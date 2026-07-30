@@ -108,7 +108,7 @@ export const appRouter = router({
 
     categories: publicProcedure.query(async () => {
       const jobs = localDb.getJobs();
-      const categories = [...new Set(jobs.map((j: any) => j.category))];
+      const categories = Array.from(new Set(jobs.map((j: any) => j.category)));
       return categories;
     }),
 
