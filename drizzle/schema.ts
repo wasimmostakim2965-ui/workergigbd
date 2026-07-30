@@ -70,8 +70,13 @@ export const jobs = pgTable("jobs", {
   id: serial("id").primaryKey(),
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
+  requirements: text("requirements"), // Requirements for the job
   category: varchar("category", { length: 100 }).notNull(),
-  pay: decimal("pay", { precision: 10, scale: 3 }).notNull(),
+  pay: decimal("pay", { precision: 10, scale: 3 }).notNull(), // Total amount (including screenshot costs)
+  perWorkerPay: decimal("perWorkerPay", { precision: 10, scale: 3 }).notNull(), // Per worker payment
+  workerCount: integer("workerCount").notNull(), // Number of workers to select
+  screenshotCount: integer("screenshotCount").default(0), // Number of screenshots required (max 4)
+  screenshotCostPerUnit: decimal("screenshotCostPerUnit", { precision: 10, scale: 3 }).default("0.10"), // Cost per screenshot (0.10 BDT)
   timeRequired: integer("timeRequired").default(5),
   totalSlots: integer("totalSlots").default(100),
   slotsRemaining: integer("slotsRemaining").default(100),
@@ -189,3 +194,23 @@ export const userBalances = pgTable("userBalances", {
 
 export type UserBalance = typeof userBalances.$inferSelect;
 export type InsertUserBalance = typeof userBalances.$inferInsert;
+
+// ===========================================
+// SUPPORT MESSAGES TABLE
+// ===========================================
+export const supportMessages = pgTable("supportMessages", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  userName: varchar("userName", { length: 255 }).notNull(),
+  userEmail: varchar("userEmail", { length: 320 }),
+  subject: varchar("subject", { length: 255 }),
+  message: text("message").notNull(),
+  status: varchar("status", { length: 50 }).default("pending").notNull(), // pending, responded, resolved
+  adminResponse: text("adminResponse"),
+  respondedBy: integer("respondedBy"),
+  respondedAt: timestamp("respondedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type SupportMessage = typeof supportMessages.$inferSelect;
+export type InsertSupportMessage = typeof supportMessages.$inferInsert;

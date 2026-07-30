@@ -46,6 +46,7 @@ const adminMenuItems = [
   { icon: Wallet, label: "Withdrawals", path: "/admin/withdrawals" },
   { icon: Bell, label: "Notifications", path: "/admin/notifications" },
   { icon: FileText, label: "Activity Logs", path: "/admin/logs" },
+  { icon: MessageCircle, label: "Support", path: "/admin/support" },
 ];
 
 function AdminSidebarContent({ children }: { children: React.ReactNode }) {

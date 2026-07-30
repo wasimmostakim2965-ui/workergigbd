@@ -30,6 +30,7 @@ import AdminJobs from "./pages/admin/AdminJobs";
 import AdminWithdrawals from "./pages/admin/AdminWithdrawals";
 import AdminNotifications from "./pages/admin/AdminNotifications";
 import AdminLogs from "./pages/admin/AdminLogs";
+import AdminSupport from "./pages/admin/AdminSupport";
 import DashboardLayout from "./components/DashboardLayout";
 import AdminLayout from "./components/AdminLayout";
 
@@ -68,6 +69,7 @@ function Router() {
       <Route path={"/admin/withdrawals"} component={() => <AdminLayout><AdminWithdrawals /></AdminLayout>} />
       <Route path={"/admin/notifications"} component={() => <AdminLayout><AdminNotifications /></AdminLayout>} />
       <Route path={"/admin/logs"} component={() => <AdminLayout><AdminLogs /></AdminLayout>} />
+      <Route path={"/admin/support"} component={() => <AdminLayout><AdminSupport /></AdminLayout>} />
 
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />

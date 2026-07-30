@@ -15,16 +15,26 @@ import {
   Award,
   Star,
   CheckCircle,
+  MessageCircle,
+  Send,
+  Loader2,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { motion } from "framer-motion";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
+import { useState, useRef } from "react";
+
+const TELEGRAM_SUPPORT_URL = "https://t.me/LOCKBITghh";
 
 const menuItems = [
   { icon: Shield, label: "Security", subtitle: "Password & Authentication", action: "settings" },
@@ -38,6 +48,51 @@ const menuItems = [
 
 export default function ProfilePage() {
   const { user } = useAuth();
+  const [showSupportModal, setShowSupportModal] = useState(false);
+  const [supportSubject, setSupportSubject] = useState("");
+  const [supportMessage, setSupportMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const submitSupport = trpc.support.create.useMutation({
+    onSuccess: () => {
+      toast.success("Support message sent! We'll respond soon.");
+      setShowSupportModal(false);
+      setSupportSubject("");
+      setSupportMessage("");
+      setIsSubmitting(false);
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to send message");
+      setIsSubmitting(false);
+    },
+  });
+
+  const handleSupportSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supportMessage.trim()) {
+      toast.error("Please enter your message");
+      return;
+    }
+    setIsSubmitting(true);
+    submitSupport.mutate({
+      subject: supportSubject || "General Inquiry",
+      message: supportMessage,
+    });
+  };
+
+  const handleMenuClick = (action: string, label: string) => {
+    if (action === "settings") {
+      toast("This feature is coming soon!");
+    } else if (action === "info") {
+      if (label === "Help & Support") {
+        setShowSupportModal(true);
+      } else {
+        toast("This feature is coming soon!");
+      }
+    } else if (action === "logout") {
+      toast("You have been logged out");
+    }
+  };
 
   return (
     <div className="px-4 py-4 space-y-4">
@@ -129,11 +184,54 @@ export default function ProfilePage() {
         </div>
       </motion.div>
 
-      {/* Skills / Achievements */}
+      {/* Live Support Card */}
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 50 }}
+      >
+        <Card className="shadow-soft border-slate-100 overflow-hidden">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+              <MessageCircle className="h-4 w-4 text-emerald-500" />
+              Live Support
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {/* In-App Support */}
+            <Button
+              variant="outline"
+              className="w-full justify-start border-emerald-200 hover:bg-emerald-50"
+              onClick={() => setShowSupportModal(true)}
+            >
+              <MessageCircle className="h-4 w-4 mr-2 text-emerald-500" />
+              Send Message to Support
+            </Button>
+            
+            {/* Telegram Support */}
+            <a 
+              href={TELEGRAM_SUPPORT_URL} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="block"
+            >
+              <Button
+                variant="outline"
+                className="w-full justify-start border-blue-200 hover:bg-blue-50"
+              >
+                <Send className="h-4 w-4 mr-2 text-blue-500" />
+                Telegram Live Support
+              </Button>
+            </a>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* Skills / Achievements */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 75 }}
       >
         <Card className="shadow-soft border-slate-100">
           <CardContent className="p-4">
@@ -165,15 +263,7 @@ export default function ProfilePage() {
         {menuItems.map((item, i) => (
           <button
             key={item.label}
-            onClick={() => {
-              if (item.action === "settings") {
-                toast("This feature is coming soon!");
-              } else if (item.action === "info") {
-                toast("This feature is coming soon!");
-              } else if (item.action === "logout") {
-                toast("You have been logged out");
-              }
-            }}
+            onClick={() => handleMenuClick(item.action, item.label)}
             className={`w-full flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 transition-colors ${
               item.action === "logout" ? "text-red-500" : ""
             } ${i < menuItems.length - 1 ? "border-b border-slate-50" : ""}`}
@@ -233,6 +323,95 @@ export default function ProfilePage() {
       <div className="text-center py-3">
         <p className="text-xs text-slate-400 font-mono">WorkerGigBD v1.0.0</p>
       </div>
+
+      {/* Support Modal */}
+      <AnimatePresence>
+        {showSupportModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={() => setShowSupportModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl max-w-md w-full p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                <MessageCircle className="h-5 w-5 text-emerald-500" />
+                Contact Support
+              </h2>
+              
+              <form onSubmit={handleSupportSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Subject (Optional)</Label>
+                  <Input
+                    placeholder="Brief subject of your inquiry"
+                    value={supportSubject}
+                    onChange={(e) => setSupportSubject(e.target.value)}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>Message *</Label>
+                  <Textarea
+                    placeholder="Describe your issue or question..."
+                    rows={4}
+                    value={supportMessage}
+                    onChange={(e) => setSupportMessage(e.target.value)}
+                    required
+                  />
+                </div>
+                
+                <div className="flex gap-3 pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setShowSupportModal(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="flex-1 bg-emerald-500 hover:bg-emerald-600"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4 mr-2" />
+                        Send Message
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </form>
+              
+              <div className="mt-4 pt-4 border-t">
+                <p className="text-xs text-slate-500 text-center mb-2">Or contact us directly:</p>
+                <a 
+                  href={TELEGRAM_SUPPORT_URL} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 text-sm text-blue-500 hover:text-blue-600"
+                >
+                  <Send className="h-4 w-4" />
+                  Telegram Live Support
+                </a>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

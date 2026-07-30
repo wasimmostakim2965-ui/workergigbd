@@ -11,6 +11,7 @@ import {
   userBalances, type InsertUserBalance,
   userReviews, type InsertUserReview,
   deposits, type InsertDeposit,
+  supportMessages, type InsertSupportMessage,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -743,4 +744,53 @@ export async function getUserDepositList(userId: number) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(deposits).where(eq(deposits.userId, userId)).orderBy(desc(deposits.createdAt));
+}
+
+// ─── Support Messages ─────────────────────────────────────────────────────────
+
+export async function getSupportMessages() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(supportMessages).orderBy(desc(supportMessages.createdAt));
+}
+
+export async function getSupportMessagesByUser(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(supportMessages).where(eq(supportMessages.userId, userId)).orderBy(desc(supportMessages.createdAt));
+}
+
+export async function createSupportMessage(data: {
+  userId: number;
+  userName: string;
+  userEmail?: string;
+  subject?: string;
+  message: string;
+}) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const result = await db.insert(supportMessages).values({
+    userId: data.userId,
+    userName: data.userName,
+    userEmail: data.userEmail || null,
+    subject: data.subject || null,
+    message: data.message,
+    status: "pending",
+  });
+  return result;
+}
+
+export async function respondToSupportMessage(id: number, response: string, respondedBy: number, status?: string) {
+  const db = await getDb();
+  if (!db) return;
+  
+  await db.update(supportMessages)
+    .set({
+      adminResponse: response,
+      respondedBy: respondedBy,
+      respondedAt: new Date(),
+      status: status || "responded",
+    })
+    .where(eq(supportMessages.id, id));
 }

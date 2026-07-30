@@ -10,6 +10,30 @@ import * as db from "./db";
 export const appRouter = router({
   system: systemRouter,
 
+  support: router({
+    create: protectedProcedure.input(z.object({
+      subject: z.string().optional(),
+      message: z.string().min(1),
+    })).mutation(async ({ input, ctx }) => {
+      const user = await db.getUserById(ctx.user.id);
+      if (!user) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "User not found" });
+      }
+      await db.createSupportMessage({
+        userId: ctx.user.id,
+        userName: user.name || "Unknown",
+        userEmail: user.email || "",
+        subject: input.subject || "General Inquiry",
+        message: input.message,
+      });
+      return { success: true };
+    }),
+
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return db.getSupportMessagesByUser(ctx.user.id);
+    }),
+  }),
+
   stats: router({
     // Public — powers the homepage "Registered users" counter. No auth needed.
     public: publicProcedure.query(async () => {
@@ -112,8 +136,12 @@ export const appRouter = router({
     create: adminProcedure.input(z.object({
       title: z.string().min(1),
       description: z.string().optional(),
+      requirements: z.string().optional(),
       category: z.string().min(1),
       pay: z.union([z.number().min(0), z.string().regex(/^\d+(\.\d+)?$/)]),
+      perWorkerPay: z.union([z.number().min(0), z.string().regex(/^\d+(\.\d+)?$/)]).optional(),
+      workerCount: z.number().min(1).optional(),
+      screenshotCount: z.number().min(0).max(4).optional(),
       timeRequired: z.number().min(1).optional(),
       totalSlots: z.number().min(1).optional(),
       isPinned: z.number().optional(),
@@ -125,8 +153,11 @@ export const appRouter = router({
       const result = await db.createJob({
         ...input,
         pay: String(input.pay),
+        perWorkerPay: input.perWorkerPay !== undefined ? String(input.perWorkerPay) : String(input.pay),
+        workerCount: input.workerCount || 1,
+        screenshotCount: input.screenshotCount || 0,
         createdBy: ctx.user.id,
-        slotsRemaining: input.totalSlots || 100,
+        slotsRemaining: input.totalSlots || input.workerCount || 100,
         workersCompleted: 0,
       });
       return result;
@@ -326,6 +357,20 @@ export const appRouter = router({
     // Stats - Complete platform statistics
     stats: adminProcedure.query(async () => {
       return db.getAdminStats();
+    }),
+
+    // Support Messages
+    supportMessages: adminProcedure.query(async () => {
+      return db.getSupportMessages();
+    }),
+
+    respondToSupport: adminProcedure.input(z.object({
+      id: z.number(),
+      response: z.string().min(1),
+      status: z.enum(["pending", "responded", "resolved"]).optional(),
+    })).mutation(async ({ input, ctx }) => {
+      await db.respondToSupportMessage(input.id, input.response, ctx.user.id, input.status);
+      return { success: true };
     }),
   }),
 });
