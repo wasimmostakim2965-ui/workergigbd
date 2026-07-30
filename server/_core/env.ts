@@ -1,31 +1,20 @@
-# ===========================================
-# WorkerGigBD - Environment Variables
-# ===========================================
+import "dotenv/config";
 
-# ─── Supabase PostgreSQL Database ───
-DATABASE_URL=postgresql://postgres.tsokfguhydwausvuaaiw:Wasim%40%23%24_%26-%2B%28%29%2F@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true
-DIRECT_URL=postgresql://postgres.tsokfguhydwausvuaaiw:Wasim%40%23%24_%26-%2B%28%29%2F@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres
+const env = process.env;
 
-# ─── Supabase Auth ───
-SUPABASE_URL=https://tsokfguhydwausvuaaiw.supabase.co
-SUPABASE_PUBLISHABLE_KEY=sb_publishable_hfgUFRLu1UrBd10ulCUgsA_po8qwPjw
-SUPABASE_SECRET_KEY=sb_secret_EEIePAqN1UrBd10ulCUgsAJzY9kGk7w
-SUPABASE_JWKS_URL=https://tsokfguhydwausvuaaiw.supabase.co/auth/v1/.well-known/jwks.json
-
-# ─── Server Settings ───
-PORT=3000
-NODE_ENV=development
-
-# ─── Database Mode ───
-USE_LOCAL_DB=false
-
-# ─── FORGE API ───
-FORGE_API_URL=https://api.example.com
-FORGE_API_KEY=your-forge-api-key-here
-
-# ─── App Settings ───
-APP_ID=workergigbd-app
-COOKIE_SECRET=workergigbd-cookie-secret-2024-secure-random-string
-
-# ─── Owner OpenID (Admin) ───
-OWNER_OPEN_ID=
+export const ENV = {
+  databaseUrl: env.DATABASE_URL || "",
+  directUrl: env.DIRECT_URL || "",
+  supabaseUrl: env.SUPABASE_URL || "",
+  supabasePublishableKey: env.SUPABASE_PUBLISHABLE_KEY || "",
+  supabaseSecretKey: env.SUPABASE_SECRET_KEY || "",
+  supabaseJwksUrl: env.SUPABASE_JWKS_URL || "",
+  port: parseInt(env.PORT || "3000"),
+  nodeEnv: env.NODE_ENV || "development",
+  useLocalDb: env.USE_LOCAL_DB === "true",
+  forgeApiUrl: env.FORGE_API_URL || "",
+  forgeApiKey: env.FORGE_API_KEY || "",
+  appId: env.APP_ID || "workergigbd-app",
+  cookieSecret: env.COOKIE_SECRET || "default-secret",
+  ownerOpenId: env.OWNER_OPEN_ID || "",
+};

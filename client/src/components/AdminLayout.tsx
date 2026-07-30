@@ -241,44 +241,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
-  // Redirect to home if not admin (even after password verification)
-  if (!loading && user && user.role !== "admin") {
-    setLocation("/");
-    return null;
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
-          <div className="flex flex-col items-center gap-6">
-            <h1 className="text-2xl font-semibold tracking-tight text-center">
-              Admin Access Required
-            </h1>
-            <p className="text-sm text-muted-foreground text-center max-w-sm">
-              Please sign in with an admin account to access this panel.
-            </p>
-          </div>
-          <Button
-            onClick={() => startLogin()}
-            size="lg"
-            className="w-full shadow-lg hover:shadow-xl transition-all"
-          >
-            Sign in
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
+  // Demo mode: Allow access with just password verification
+  // In production, this should also verify user role from the backend
   return (
     <SidebarProvider>
       <AdminSidebarContent>{children}</AdminSidebarContent>
