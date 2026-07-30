@@ -1,19 +1,12 @@
 {
   "version": "7",
-  "dialect": "mysql",
+  "dialect": "postgresql",
   "entries": [
     {
       "idx": 0,
-      "version": "5",
-      "when": 1785311623681,
-      "tag": "0000_high_korg",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "5",
-      "when": 1785375636994,
-      "tag": "0001_fixed_thundra",
+      "version": "7",
+      "when": 1785376027829,
+      "tag": "0000_lazy_thanos",
       "breakpoints": true
     }
   ]

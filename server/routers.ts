@@ -10,6 +10,18 @@ import * as db from "./db";
 export const appRouter = router({
   system: systemRouter,
 
+  stats: router({
+    // Public — powers the homepage "Registered users" counter. No auth needed.
+    public: publicProcedure.query(async () => {
+      const allUsers = await db.getAllUsers();
+      const allJobs = await db.getJobs();
+      return {
+        totalUsers: allUsers.length,
+        totalJobs: allJobs.filter(j => j.status === "active").length,
+      };
+    }),
+  }),
+
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {

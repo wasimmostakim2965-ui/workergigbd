@@ -3,6 +3,7 @@
  * Design: Professional Corporate — Deep Blue + Emerald
  * Sections: Hero, Features, How It Works, Stats, CTA, Footer
  */
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
@@ -18,15 +19,130 @@ import {
   Briefcase,
   TrendingUp,
   Award,
+  Mail,
+  Lock,
+  User,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { motion } from "framer-motion";
+import { trpc } from "@/lib/trpc";
+
+function HeroAuthCard() {
+  const [, setLocation] = useLocation();
+  const utils = trpc.useUtils();
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const loginMutation = trpc.auth.login.useMutation({
+    onSuccess: async () => {
+      await utils.auth.me.invalidate();
+      setLocation("/dashboard");
+    },
+    onError: (err) => setError(err.message || "Invalid email or password"),
+  });
+
+  const registerMutation = trpc.auth.register.useMutation({
+    onSuccess: async () => {
+      await utils.auth.me.invalidate();
+      // Straight into the dashboard — no confirmation code at signup.
+      setLocation("/dashboard");
+    },
+    onError: (err) => setError(err.message || "Could not create your account"),
+  });
+
+  const isPending = loginMutation.isPending || registerMutation.isPending;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (mode === "login") {
+      if (!email || !password) return setError("Please enter your email and password");
+      loginMutation.mutate({ email, password });
+    } else {
+      if (!name || !email || !password) return setError("Please fill in all fields");
+      if (password.length < 8) return setError("Password must be at least 8 characters");
+      registerMutation.mutate({ name, email, password });
+    }
+  };
+
+  return (
+    <div className="bg-white border border-border rounded-2xl shadow-float p-7">
+      <h2 className="font-heading text-lg font-bold text-foreground mb-5">
+        {mode === "login" ? "Log in to your account" : "Create your free account"}
+      </h2>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {mode === "register" && (
+          <div className="space-y-1.5">
+            <Label htmlFor="hero-name">Full Name</Label>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input id="hero-name" className="pl-10 h-10" placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-1.5">
+          <Label htmlFor="hero-email">Email</Label>
+          <div className="relative">
+            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input id="hero-email" type="email" className="pl-10 h-10" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="hero-password">Password</Label>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input id="hero-password" type="password" className="pl-10 h-10" placeholder={mode === "register" ? "At least 8 characters" : "••••••••"} value={password} onChange={(e) => setPassword(e.target.value)} />
+          </div>
+        </div>
+
+        {error && (
+          <p className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{error}</p>
+        )}
+
+        <Button type="submit" className="w-full h-10 bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isPending}>
+          {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : mode === "login" ? "Log In" : "Create Free Account"}
+        </Button>
+      </form>
+
+      <div className="flex items-center gap-3 my-4">
+        <div className="h-px bg-border flex-1" />
+        <span className="text-xs text-muted-foreground">or</span>
+        <div className="h-px bg-border flex-1" />
+      </div>
+
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full h-10 border-emerald-500/30 text-emerald-700 hover:bg-emerald-50"
+        onClick={() => { setError(null); setMode(mode === "login" ? "register" : "login"); }}
+      >
+        {mode === "login" ? "Create Free Account" : "Already have an account? Log in"}
+      </Button>
+
+      {mode === "register" && (
+        <p className="text-xs text-center text-muted-foreground mt-3">
+          No confirmation code needed now — only later, before your first withdrawal.
+        </p>
+      )}
+    </div>
+  );
+}
 
 export default function Home() {
   let { user, loading, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
+  const statsQuery = trpc.stats.public.useQuery();
 
   const handleGetStarted = () => {
     setLocation(isAuthenticated ? "/dashboard" : "/register");
@@ -84,84 +200,101 @@ export default function Home() {
       {/* ─── Hero Section ─── */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-primary/3 to-background" />
-        <div className="container relative pt-16 pb-20 md:pt-24 md:pb-28">
-          <div className="max-w-3xl mx-auto text-center">
+        <div className="container relative pt-16 pb-20 md:pt-20 md:pb-24">
+          <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-10 lg:gap-14 items-start">
+            {/* Left: headline + real stats */}
+            <div>
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+                <Badge className="mb-6 bg-emerald-500/10 text-emerald-700 border-emerald-500/20 px-4 py-1.5 text-sm">
+                  <Zap className="h-3.5 w-3.5 mr-1.5" />
+                  Bangladesh's #1 Micro-Task Platform
+                </Badge>
+              </motion.div>
+
+              <motion.h1
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.1 }}
+                className="font-heading text-4xl md:text-5xl font-bold text-foreground leading-tight mb-6"
+              >
+                Find Work.
+                <span className="text-emerald-600"> Earn Money.</span>
+                <br />
+                Grow Skills.
+              </motion.h1>
+
+              <motion.p
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+                className="text-lg text-muted-foreground max-w-xl mb-8 leading-relaxed"
+              >
+                Complete micro-tasks and earn real money from anywhere.
+                Video watching, surveys, social media — choose tasks that match your skills and schedule.
+              </motion.p>
+
+              {/* Real stats pulled from the database — no placeholders */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.3 }}
+                className="flex items-center gap-8 mb-8"
+              >
+                <div>
+                  <p className="font-heading text-2xl font-bold text-primary">
+                    {statsQuery.data ? statsQuery.data.totalUsers.toLocaleString() : "—"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Registered Users</p>
+                </div>
+                <div>
+                  <p className="font-heading text-2xl font-bold text-primary">
+                    {statsQuery.data ? statsQuery.data.totalJobs.toLocaleString() : "—"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Active Jobs</p>
+                </div>
+              </motion.div>
+
+              {/* Trust indicators */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.5 }}
+                className="flex items-center gap-6"
+              >
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  Secure & Encrypted
+                </span>
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  Fast Payouts
+                </span>
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  24/7 Support
+                </span>
+              </motion.div>
+            </div>
+
+            {/* Right: inline login card (register toggled below it) */}
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-            >
-              <Badge className="mb-6 bg-emerald-500/10 text-emerald-700 border-emerald-500/20 px-4 py-1.5 text-sm">
-                <Zap className="h-3.5 w-3.5 mr-1.5" />
-                Bangladesh's #1 Micro-Task Platform
-              </Badge>
-            </motion.div>
-
-            <motion.h1
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-              className="font-heading text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-tight mb-6"
-            >
-              Find Work.
-              <span className="text-emerald-600"> Earn Money.</span>
-              <br />
-              Grow Skills.
-            </motion.h1>
-
-            <motion.p
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.2 }}
-              className="text-lg text-muted-foreground max-w-xl mx-auto mb-8 leading-relaxed"
             >
-              Complete micro-tasks and earn real money from anywhere. 
-              Video watching, surveys, social media — choose tasks that match your skills and schedule.
-            </motion.p>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-              className="flex flex-col sm:flex-row items-center justify-center gap-4"
-            >
-              <Button
-                size="lg"
-                className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 h-12 text-base shadow-float press-effect"
-                onClick={handleGetStarted}
-              >
-                Free Registration
-                <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
-              <Button
-                variant="outline"
-                size="lg"
-                className="h-12 text-base border-border px-8"
-              >
-                <Play className="h-4 w-4 mr-2" />
-                How It Works
-              </Button>
-            </motion.div>
-
-            {/* Trust indicators */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.5, delay: 0.5 }}
-              className="flex items-center justify-center gap-6 mt-10"
-            >
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                Secure & Encrypted
-              </span>
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                Fast Payouts
-              </span>
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                24/7 Support
-              </span>
+              {isAuthenticated ? (
+                <div className="bg-white border border-border rounded-2xl shadow-float p-8 text-center">
+                  <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto mb-3" />
+                  <p className="font-heading text-lg font-bold text-foreground mb-1">You're logged in</p>
+                  <p className="text-sm text-muted-foreground mb-5">Continue to your dashboard to find jobs.</p>
+                  <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" onClick={handleGetStarted}>
+                    Go to Dashboard
+                    <ArrowRight className="h-4 w-4 ml-2" />
+                  </Button>
+                </div>
+              ) : (
+                <HeroAuthCard />
+              )}
             </motion.div>
           </div>
         </div>
@@ -323,10 +456,8 @@ export default function Home() {
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto">
             {[
-              { icon: Users, label: "Registered Users" },
-              { icon: Briefcase, label: "Available Jobs" },
-              { icon: DollarSign, label: "Total Earnings" },
-              { icon: Award, label: "Success Rate" },
+              { icon: Users, label: "Registered Users", value: statsQuery.data?.totalUsers },
+              { icon: Briefcase, label: "Active Jobs", value: statsQuery.data?.totalJobs },
             ].map((stat, i) => (
               <motion.div
                 key={stat.label}
@@ -338,7 +469,7 @@ export default function Home() {
               >
                 <stat.icon className="h-8 w-8 mx-auto mb-2 text-white/60" />
                 <p className="font-heading text-3xl md:text-4xl font-bold mb-1">
-                  Coming Soon
+                  {stat.value !== undefined ? stat.value.toLocaleString() : "—"}
                 </p>
                 <p className="text-sm text-white/70">{stat.label}</p>
               </motion.div>

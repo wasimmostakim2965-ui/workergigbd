@@ -1,80 +1,63 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal } from "drizzle-orm/mysql-core";
+import { integer, pgEnum, pgTable, serial, text, timestamp, varchar, decimal } from "drizzle-orm/pg-core";
 
-/**
- * Core user table backing auth flow.
- * Extend this file with additional tables as your product grows.
- * Columns use camelCase to match both database fields and generated types.
- */
-export const users = mysqlTable("users", {
-  /** Surrogate primary key. Auto-incremented numeric value managed by the database. */
-  id: int("id").autoincrement().primaryKey(),
-  /** Session identity key. For email/password accounts this is a random UUID minted at registration (not a Manus openId anymore). Unique per user. */
+export const userRoleEnum = pgEnum("user_role", ["user", "admin"]);
+export const paymentMethodEnum = pgEnum("payment_method", ["bkash", "nagad", "rocket", "bank"]);
+export const jobStatusEnum = pgEnum("job_status", ["active", "inactive", "completed", "paused"]);
+export const earningStatusEnum = pgEnum("earning_status", ["completed", "pending", "failed"]);
+export const withdrawalStatusEnum = pgEnum("withdrawal_status", ["pending", "approved", "rejected", "processed"]);
+export const notificationTypeEnum = pgEnum("notification_type", ["info", "earning", "system", "payment"]);
+
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }).unique(),
-  /** bcrypt hash of the user's password. Null only for legacy OAuth-only accounts. */
   passwordHash: varchar("passwordHash", { length: 255 }),
-  /** 1 once the user has clicked their email verification link. Required before withdrawals are allowed. */
-  emailVerified: int("emailVerified").default(0).notNull(),
-  /** Pending email verification token (random, single-use). Cleared once verified. */
+  emailVerified: integer("emailVerified").default(0).notNull(),
   emailVerifyToken: varchar("emailVerifyToken", { length: 128 }),
   emailVerifyTokenExpiresAt: timestamp("emailVerifyTokenExpiresAt"),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  /** Phone number for payment (Bkash/Nagad/Rocket) */
+  role: userRoleEnum("role").default("user").notNull(),
   phone: varchar("phone", { length: 20 }),
-  /** Payment method preference */
-  paymentMethod: mysqlEnum("paymentMethod", ["bkash", "nagad", "rocket", "bank"]),
+  paymentMethod: paymentMethodEnum("paymentMethod"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-/**
- * Jobs table — micro-tasks available on the platform
- */
-export const jobs = mysqlTable("jobs", {
-  id: int("id").autoincrement().primaryKey(),
+export const jobs = pgTable("jobs", {
+  id: serial("id").primaryKey(),
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
   category: varchar("category", { length: 100 }).notNull(),
   pay: decimal("pay", { precision: 10, scale: 3 }).notNull(),
-  /** Time in minutes estimated to complete */
-  timeRequired: int("timeRequired").default(5),
-  /** Total slots available */
-  totalSlots: int("totalSlots").default(100),
-  /** Slots remaining */
-  slotsRemaining: int("slotsRemaining").default(100),
-  /** Workers who have completed this job */
-  workersCompleted: int("workersCompleted").default(0),
+  timeRequired: integer("timeRequired").default(5),
+  totalSlots: integer("totalSlots").default(100),
+  slotsRemaining: integer("slotsRemaining").default(100),
+  workersCompleted: integer("workersCompleted").default(0),
   rating: decimal("rating", { precision: 3, scale: 1 }).default("4.5"),
-  isPinned: int("isPinned").default(0),
-  isTopJob: int("isTopJob").default(0),
-  status: mysqlEnum("status", ["active", "inactive", "completed", "paused"]).default("active").notNull(),
-  /** Job creator (admin user id) */
-  createdBy: int("createdBy"),
-  /** URL or link for the job task */
+  isPinned: integer("isPinned").default(0),
+  isTopJob: integer("isTopJob").default(0),
+  status: jobStatusEnum("status").default("active").notNull(),
+  createdBy: integer("createdBy"),
   taskUrl: text("taskUrl"),
   location: varchar("location", { length: 100 }).default("All"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type Job = typeof jobs.$inferSelect;
 export type InsertJob = typeof jobs.$inferInsert;
 
-/**
- * Completed jobs / earnings history per user
- */
-export const earnings = mysqlTable("earnings", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  jobId: int("jobId").notNull(),
+export const earnings = pgTable("earnings", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  jobId: integer("jobId").notNull(),
   amount: decimal("amount", { precision: 10, scale: 3 }).notNull(),
-  status: mysqlEnum("status", ["completed", "pending", "failed"]).default("pending").notNull(),
+  status: earningStatusEnum("status").default("pending").notNull(),
   completedAt: timestamp("completedAt").defaultNow(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -82,49 +65,39 @@ export const earnings = mysqlTable("earnings", {
 export type Earning = typeof earnings.$inferSelect;
 export type InsertEarning = typeof earnings.$inferInsert;
 
-/**
- * Withdrawal requests from users
- */
-export const withdrawalRequests = mysqlTable("withdrawalRequests", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
+export const withdrawalRequests = pgTable("withdrawalRequests", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
   amount: decimal("amount", { precision: 10, scale: 3 }).notNull(),
   paymentMethod: varchar("paymentMethod", { length: 50 }).notNull(),
-  /** Payment number (Bkash/Nagad number) */
   paymentNumber: varchar("paymentNumber", { length: 20 }).notNull(),
-  status: mysqlEnum("status", ["pending", "approved", "rejected", "processed"]).default("pending").notNull(),
+  status: withdrawalStatusEnum("status").default("pending").notNull(),
   adminNote: text("adminNote"),
-  processedBy: int("processedBy"),
+  processedBy: integer("processedBy"),
   processedAt: timestamp("processedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type WithdrawalRequest = typeof withdrawalRequests.$inferSelect;
 export type InsertWithdrawalRequest = typeof withdrawalRequests.$inferInsert;
 
-/**
- * Notifications for users
- */
-export const notifications = mysqlTable("notifications", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
   title: varchar("title", { length: 255 }).notNull(),
   message: text("message"),
-  isRead: int("isRead").default(0).notNull(),
-  type: mysqlEnum("type", ["info", "earning", "system", "payment"]).default("info").notNull(),
+  isRead: integer("isRead").default(0).notNull(),
+  type: notificationTypeEnum("type").default("info").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = typeof notifications.$inferInsert;
 
-/**
- * Activity logs for admin tracking
- */
-export const activityLogs = mysqlTable("activityLogs", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId"),
+export const activityLogs = pgTable("activityLogs", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId"),
   action: varchar("action", { length: 255 }).notNull(),
   details: text("details"),
   ipAddress: varchar("ipAddress", { length: 45 }),
@@ -134,16 +107,13 @@ export const activityLogs = mysqlTable("activityLogs", {
 export type ActivityLog = typeof activityLogs.$inferSelect;
 export type InsertActivityLog = typeof activityLogs.$inferInsert;
 
-/**
- * User balances (earning + deposit tracking)
- */
-export const userBalances = mysqlTable("userBalances", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
+export const userBalances = pgTable("userBalances", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull().unique(),
   earning: decimal("earning", { precision: 10, scale: 3 }).default("0.000").notNull(),
   deposit: decimal("deposit", { precision: 10, scale: 3 }).default("0.000").notNull(),
   totalWithdrawn: decimal("totalWithdrawn", { precision: 10, scale: 3 }).default("0.000").notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type UserBalance = typeof userBalances.$inferSelect;

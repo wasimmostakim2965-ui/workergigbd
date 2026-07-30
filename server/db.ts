@@ -1,5 +1,6 @@
 import { eq, desc, and, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
 import {
   InsertUser, users,
   jobs, type InsertJob,
@@ -14,10 +15,16 @@ import { ENV } from './_core/env';
 let _db: ReturnType<typeof drizzle> | null = null;
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
+// Supabase's pooler requires SSL; `sslmode=require` in the connection string
+// also works, but this makes it explicit even if that's omitted.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      const pool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        ssl: { rejectUnauthorized: false },
+      });
+      _db = drizzle(pool);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
@@ -84,7 +91,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       updateSet.lastSignedIn = new Date();
     }
 
-    await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
+    await db.insert(users).values(values).onConflictDoUpdate({ target: users.openId, set: updateSet });
   } catch (error) {
     console.error("[Database] Failed to upsert user:", error);
     throw error;
@@ -207,8 +214,9 @@ export async function initUserBalance(userId: number) {
 export async function addEarning(userId: number, amount: number) {
   const db = await getDb();
   if (!db) return;
-  await db.insert(userBalances).values({ userId, earning: sql`earning + ${amount}` }).onDuplicateKeyUpdate({
-    set: { earning: sql`earning + ${amount}` },
+  await db.insert(userBalances).values({ userId, earning: String(amount) }).onConflictDoUpdate({
+    target: userBalances.userId,
+    set: { earning: sql`${userBalances.earning} + ${amount}` },
   });
 }
 
