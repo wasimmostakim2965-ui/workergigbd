@@ -1,14 +1,20 @@
 import { integer, pgEnum, pgTable, serial, text, timestamp, varchar, decimal } from "drizzle-orm/pg-core";
 
 export const userRoleEnum = pgEnum("user_role", ["user", "admin"]);
+export const userStatusEnum = pgEnum("user_status", ["active", "banned", "suspended"]);
 export const paymentMethodEnum = pgEnum("payment_method", ["bkash", "nagad", "rocket", "bank"]);
 export const jobStatusEnum = pgEnum("job_status", ["active", "inactive", "completed", "paused"]);
 export const earningStatusEnum = pgEnum("earning_status", ["completed", "pending", "failed"]);
 export const withdrawalStatusEnum = pgEnum("withdrawal_status", ["pending", "approved", "rejected", "processed"]);
 export const notificationTypeEnum = pgEnum("notification_type", ["info", "earning", "system", "payment"]);
+export const depositStatusEnum = pgEnum("deposit_status", ["pending", "approved", "rejected"]);
 
+// ===========================================
+// USERS TABLE - Complete User Management
+// ===========================================
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
+  userId: varchar("userId", { length: 10 }).unique(), // 10-digit random ID for search
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }).unique(),
@@ -18,8 +24,22 @@ export const users = pgTable("users", {
   emailVerifyTokenExpiresAt: timestamp("emailVerifyTokenExpiresAt"),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: userRoleEnum("role").default("user").notNull(),
+  
+  // User Status Management
+  status: userStatusEnum("status").default("active").notNull(), // active, banned, suspended
+  suspendedUntil: timestamp("suspendedUntil"), // For temporary suspension
+  banReason: text("banReason"), // Reason for ban/suspension
+  
+  // User Info
   phone: varchar("phone", { length: 20 }),
   paymentMethod: paymentMethodEnum("paymentMethod"),
+  avatar: text("avatar"), // Avatar URL
+  
+  // Rating System
+  rating: decimal("rating", { precision: 3, scale: 2 }).default("0.00"), // 0.00 to 5.00
+  totalRatings: integer("totalRatings").default(0),
+  
+  // Timestamps
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -28,6 +48,24 @@ export const users = pgTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
+// ===========================================
+// USER REVIEWS TABLE - Rating & Reviews
+// ===========================================
+export const userReviews = pgTable("userReviews", {
+  id: serial("id").primaryKey(),
+  fromUserId: integer("fromUserId").notNull(), // Who gave the review
+  toUserId: integer("toUserId").notNull(), // Who received the review
+  rating: integer("rating").notNull(), // 1 to 5 stars
+  review: text("review"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type UserReview = typeof userReviews.$inferSelect;
+export type InsertUserReview = typeof userReviews.$inferInsert;
+
+// ===========================================
+// JOBS TABLE
+// ===========================================
 export const jobs = pgTable("jobs", {
   id: serial("id").primaryKey(),
   title: varchar("title", { length: 255 }).notNull(),
@@ -52,6 +90,9 @@ export const jobs = pgTable("jobs", {
 export type Job = typeof jobs.$inferSelect;
 export type InsertJob = typeof jobs.$inferInsert;
 
+// ===========================================
+// EARNINGS TABLE - Job Completion Earnings
+// ===========================================
 export const earnings = pgTable("earnings", {
   id: serial("id").primaryKey(),
   userId: integer("userId").notNull(),
@@ -65,6 +106,9 @@ export const earnings = pgTable("earnings", {
 export type Earning = typeof earnings.$inferSelect;
 export type InsertEarning = typeof earnings.$inferInsert;
 
+// ===========================================
+// WITHDRAWAL REQUESTS TABLE
+// ===========================================
 export const withdrawalRequests = pgTable("withdrawalRequests", {
   id: serial("id").primaryKey(),
   userId: integer("userId").notNull(),
@@ -82,6 +126,27 @@ export const withdrawalRequests = pgTable("withdrawalRequests", {
 export type WithdrawalRequest = typeof withdrawalRequests.$inferSelect;
 export type InsertWithdrawalRequest = typeof withdrawalRequests.$inferInsert;
 
+// ===========================================
+// DEPOSITS TABLE - Manual Deposits by Admin
+// ===========================================
+export const deposits = pgTable("deposits", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  amount: decimal("amount", { precision: 10, scale: 3 }).notNull(),
+  paymentMethod: varchar("paymentMethod", { length: 50 }).notNull(),
+  transactionId: varchar("transactionId", { length: 100 }),
+  note: text("note"), // Admin note
+  status: depositStatusEnum("status").default("approved").notNull(),
+  addedBy: integer("addedBy").notNull(), // Admin who added
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Deposit = typeof deposits.$inferSelect;
+export type InsertDeposit = typeof deposits.$inferInsert;
+
+// ===========================================
+// NOTIFICATIONS TABLE
+// ===========================================
 export const notifications = pgTable("notifications", {
   id: serial("id").primaryKey(),
   userId: integer("userId").notNull(),
@@ -95,6 +160,9 @@ export const notifications = pgTable("notifications", {
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = typeof notifications.$inferInsert;
 
+// ===========================================
+// ACTIVITY LOGS TABLE
+// ===========================================
 export const activityLogs = pgTable("activityLogs", {
   id: serial("id").primaryKey(),
   userId: integer("userId"),
@@ -107,6 +175,9 @@ export const activityLogs = pgTable("activityLogs", {
 export type ActivityLog = typeof activityLogs.$inferSelect;
 export type InsertActivityLog = typeof activityLogs.$inferInsert;
 
+// ===========================================
+// USER BALANCES TABLE
+// ===========================================
 export const userBalances = pgTable("userBalances", {
   id: serial("id").primaryKey(),
   userId: integer("userId").notNull().unique(),

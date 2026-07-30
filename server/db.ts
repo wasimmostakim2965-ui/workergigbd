@@ -1,14 +1,16 @@
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and, sql, like, gte, lte, count } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import {
-  InsertUser, users,
+  InsertUser, users, userStatusEnum,
   jobs, type InsertJob,
   earnings, type InsertEarning,
   withdrawalRequests, type InsertWithdrawalRequest,
   notifications, type InsertNotification,
   activityLogs, type InsertActivityLog,
   userBalances, type InsertUserBalance,
+  userReviews, type InsertUserReview,
+  deposits, type InsertDeposit,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -353,3 +355,358 @@ export async function logActivity(log: InsertActivityLog) {
   if (!db) return;
   await db.insert(activityLogs).values(log);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ADMIN PANEL FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── User ID Generation ─────────────────────────────────────────────────────
+function generateUserId(): string {
+  return Math.floor(1000000000 + Math.random() * 9000000000).toString();
+}
+
+// ─── User Search & Status Management ─────────────────────────────────────────
+
+/**
+ * Search users by 10-digit userId or name or email
+ */
+export async function searchUsers(query: string) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  // Try exact userId match first
+  const exactMatch = await db.select().from(users).where(eq(users.userId, query)).limit(1);
+  if (exactMatch.length > 0) {
+    return exactMatch;
+  }
+  
+  // Then search by name or email
+  const searchPattern = `%${query}%`;
+  return db.select().from(users).where(
+    like(users.name, searchPattern)
+  ).orderBy(desc(users.createdAt)).limit(50);
+}
+
+/**
+ * Get user by 10-digit userId
+ */
+export async function getUserByUserId(userId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.userId, userId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+/**
+ * Update user status (active, banned, suspended)
+ */
+export async function updateUserStatus(
+  userId: number,
+  status: "active" | "banned" | "suspended",
+  banReason?: string,
+  suspendedUntil?: Date
+) {
+  const db = await getDb();
+  if (!db) return;
+  
+  await db.update(users).set({
+    status,
+    banReason: banReason || null,
+    suspendedUntil: suspendedUntil || null,
+    updatedAt: new Date(),
+  }).where(eq(users.id, userId));
+  
+  // Log the action
+  await logActivity({
+    userId,
+    action: `Status changed to ${status}`,
+    details: banReason ? `Reason: ${banReason}` : undefined,
+  });
+}
+
+/**
+ * Generate unique 10-digit userId for a new user
+ */
+export async function generateUniqueUserId(): Promise<string> {
+  const db = await getDb();
+  let userId: string;
+  let attempts = 0;
+  const maxAttempts = 10;
+  
+  do {
+    userId = generateUserId();
+    const existing = await db?.select().from(users).where(eq(users.userId, userId)).limit(1);
+    if (!existing || existing.length === 0) {
+      return userId;
+    }
+    attempts++;
+  } while (attempts < maxAttempts);
+  
+  throw new Error("Failed to generate unique user ID");
+}
+
+// ─── User Balance Management ─────────────────────────────────────────────────
+
+/**
+ * Add deposit to user account (Admin action)
+ */
+export async function addUserDeposit(data: {
+  userId: number;
+  amount: number;
+  paymentMethod: string;
+  transactionId?: string;
+  note?: string;
+  addedBy: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  // Insert deposit record
+  await db.insert(deposits).values({
+    userId: data.userId,
+    amount: String(data.amount),
+    paymentMethod: data.paymentMethod,
+    transactionId: data.transactionId || null,
+    note: data.note || null,
+    addedBy: data.addedBy,
+    status: "approved",
+  });
+  
+  // Update user balance
+  await db.insert(userBalances).values({
+    userId: data.userId,
+    deposit: String(data.amount),
+  }).onConflictDoUpdate({
+    target: userBalances.userId,
+    set: { deposit: sql`${userBalances.deposit} + ${data.amount}` },
+  });
+  
+  // Log activity
+  await logActivity({
+    userId: data.userId,
+    action: "DEPOSIT_ADDED",
+    details: `৳${data.amount} added by admin via ${data.paymentMethod}`,
+  });
+  
+  // Send notification
+  await createNotification({
+    userId: data.userId,
+    title: "Funds Added",
+    message: `৳${data.amount} has been added to your account via ${data.paymentMethod}. ${data.note || ""}`,
+    type: "payment",
+  });
+}
+
+/**
+ * Deduct balance from user account (Admin action)
+ */
+export async function deductUserBalance(userId: number, amount: number, reason: string, adminId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const balance = await getUserBalance(userId);
+  const totalAvailable = Number(balance?.deposit || 0) + Number(balance?.earning || 0);
+  
+  if (totalAvailable < amount) {
+    throw new Error("Insufficient balance");
+  }
+  
+  // Deduct from deposit first, then earning
+  const depositDeduct = Math.min(Number(balance?.deposit || 0), amount);
+  const earningDeduct = amount - depositDeduct;
+  
+  if (depositDeduct > 0) {
+    await db.update(userBalances).set({
+      deposit: sql`${userBalances.deposit} - ${depositDeduct}`,
+    }).where(eq(userBalances.userId, userId));
+  }
+  
+  if (earningDeduct > 0) {
+    await db.update(userBalances).set({
+      earning: sql`${userBalances.earning} - ${earningDeduct}`,
+    }).where(eq(userBalances.userId, userId));
+  }
+  
+  // Log activity
+  await logActivity({
+    userId,
+    action: "BALANCE_DEDUCTED",
+    details: `৳${amount} deducted. Reason: ${reason}`,
+  });
+}
+
+// ─── User Reviews ────────────────────────────────────────────────────────────
+
+/**
+ * Get user reviews
+ */
+export async function getUserReviews(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(userReviews).where(eq(userReviews.toUserId, userId)).orderBy(desc(userReviews.createdAt));
+}
+
+/**
+ * Add review for user
+ */
+export async function addUserReview(review: InsertUserReview) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const result = await db.insert(userReviews).values(review);
+  
+  // Update user rating
+  const allReviews = await getUserReviews(review.toUserId);
+  const totalRating = allReviews.reduce((sum, r) => sum + r.rating, 0);
+  const avgRating = totalRating / allReviews.length;
+  
+  await db.update(users).set({
+    rating: avgRating.toFixed(2),
+    totalRatings: allReviews.length,
+  }).where(eq(users.id, review.toUserId));
+  
+  return result;
+}
+
+// ─── Statistics ──────────────────────────────────────────────────────────────
+
+export interface AdminStats {
+  totalUsers: number;
+  activeUsers: number;
+  bannedUsers: number;
+  suspendedUsers: number;
+  totalJobs: number;
+  activeJobs: number;
+  totalWithdrawals: number;
+  pendingWithdrawals: number;
+  todayWithdrawals: number;
+  todayWithdrawalAmount: number;
+  totalWithdrawn: number;
+  totalDeposits: number;
+  todayDeposits: number;
+  todayDepositAmount: number;
+  totalEarnings: number;
+}
+
+export async function getAdminStats(): Promise<AdminStats> {
+  const db = await getDb();
+  if (!db) {
+    return {
+      totalUsers: 0, activeUsers: 0, bannedUsers: 0, suspendedUsers: 0,
+      totalJobs: 0, activeJobs: 0,
+      totalWithdrawals: 0, pendingWithdrawals: 0, todayWithdrawals: 0, todayWithdrawalAmount: 0, totalWithdrawn: 0,
+      totalDeposits: 0, todayDeposits: 0, todayDepositAmount: 0,
+      totalEarnings: 0,
+    };
+  }
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  
+  // User stats
+  const allUsers = await db.select().from(users);
+  const activeUsers = allUsers.filter(u => u.status === "active").length;
+  const bannedUsers = allUsers.filter(u => u.status === "banned").length;
+  const suspendedUsers = allUsers.filter(u => u.status === "suspended").length;
+  
+  // Job stats
+  const allJobs = await db.select().from(jobs);
+  const activeJobs = allJobs.filter(j => j.status === "active").length;
+  
+  // Withdrawal stats
+  const allWithdrawals = await db.select().from(withdrawalRequests);
+  const pendingWithdrawals = allWithdrawals.filter(w => w.status === "pending").length;
+  const todayWithdrawals = allWithdrawals.filter(w => w.createdAt >= today && w.createdAt < tomorrow);
+  const todayWithdrawalAmount = todayWithdrawals.reduce((sum, w) => sum + Number(w.amount), 0);
+  const totalWithdrawn = allWithdrawals.reduce((sum, w) => sum + Number(w.amount), 0);
+  
+  // Deposit stats
+  const allDeposits = await db.select().from(deposits);
+  const todayDeposits = allDeposits.filter(d => d.createdAt >= today && d.createdAt < tomorrow);
+  const todayDepositAmount = todayDeposits.reduce((sum, d) => sum + Number(d.amount), 0);
+  const totalDeposits = allDeposits.reduce((sum, d) => sum + Number(d.amount), 0);
+  
+  // Earnings stats
+  const allEarnings = await db.select().from(earnings);
+  const totalEarnings = allEarnings.reduce((sum, e) => sum + Number(e.amount), 0);
+  
+  return {
+    totalUsers: allUsers.length,
+    activeUsers,
+    bannedUsers,
+    suspendedUsers,
+    totalJobs: allJobs.length,
+    activeJobs,
+    totalWithdrawals: allWithdrawals.length,
+    pendingWithdrawals,
+    todayWithdrawals: todayWithdrawals.length,
+    todayWithdrawalAmount,
+    totalWithdrawn,
+    totalDeposits,
+    todayDeposits: todayDeposits.length,
+    todayDepositAmount,
+    totalEarnings,
+  };
+}
+
+// ─── User Detailed View ─────────────────────────────────────────────────────
+
+export interface UserDetailedInfo {
+  user: typeof users.$inferSelect;
+  balance: typeof userBalances.$inferSelect | null;
+  reviews: typeof userReviews.$inferSelect[];
+  recentEarnings: typeof earnings.$inferSelect[];
+  recentWithdrawals: typeof withdrawalRequests.$inferSelect[];
+  recentDeposits: typeof deposits.$inferSelect[];
+  totalEarnings: number;
+  totalWithdrawals: number;
+  totalDeposits: number;
+}
+
+export async function getUserDetailedInfo(userId: number): Promise<UserDetailedInfo | null> {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const userResult = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (userResult.length === 0) return null;
+  
+  const user = userResult[0];
+  const balance = await getUserBalance(userId);
+  const reviews = await getUserReviews(userId);
+  const recentEarnings = await db.select().from(earnings).where(eq(earnings.userId, userId)).orderBy(desc(earnings.createdAt)).limit(20);
+  const recentWithdrawals = await db.select().from(withdrawalRequests).where(eq(withdrawalRequests.userId, userId)).orderBy(desc(withdrawalRequests.createdAt)).limit(20);
+  const recentDeposits = await db.select().from(deposits).where(eq(deposits.userId, userId)).orderBy(desc(deposits.createdAt)).limit(20);
+
+  // Calculate totals
+  const userEarnings = await db.select().from(earnings).where(eq(earnings.userId, userId));
+  const userWithdrawals = await db.select().from(withdrawalRequests).where(eq(withdrawalRequests.userId, userId));
+  const userDeposits = await db.select().from(deposits).where(eq(deposits.userId, userId));
+
+  return {
+    user,
+    balance,
+    reviews,
+    recentEarnings,
+    recentWithdrawals,
+    recentDeposits,
+    totalEarnings: userEarnings.reduce((sum, e) => sum + Number(e.amount), 0),
+    totalWithdrawals: userWithdrawals.reduce((sum, w) => sum + Number(w.amount), 0),
+    totalDeposits: userDeposits.reduce((sum, d) => sum + Number(d.amount), 0),
+  };
+}
+
+// ─── Deposits ─────────────────────────────────────────────────────────────────
+
+export async function getAllDeposits() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(deposits).orderBy(desc(deposits.createdAt));
+}
+
+export async function getUserDepositList(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(deposits).where(eq(deposits.userId, userId)).orderBy(desc(deposits.createdAt));
+} 
