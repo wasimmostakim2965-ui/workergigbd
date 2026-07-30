@@ -233,6 +233,46 @@ export const appRouter = router({
       return db.getAllUsers();
     }),
 
+    searchUsers: adminProcedure.input(z.object({
+      query: z.string().min(1),
+    })).mutation(async ({ input }) => {
+      return db.searchUsers(input.query);
+    }),
+
+    getUserDetails: adminProcedure.input(z.object({
+      userId: z.number(),
+    })).mutation(async ({ input }) => {
+      return db.getUserDetailedInfo(input.userId);
+    }),
+
+    updateUserStatus: adminProcedure.input(z.object({
+      userId: z.number(),
+      status: z.enum(["active", "banned", "suspended"]),
+      banReason: z.string().optional(),
+      suspendedUntil: z.date().optional(),
+    })).mutation(async ({ input }) => {
+      await db.updateUserStatus(input.userId, input.status, input.banReason, input.suspendedUntil);
+      return { success: true };
+    }),
+
+    addUserFunds: adminProcedure.input(z.object({
+      userId: z.number(),
+      amount: z.number().min(1),
+      paymentMethod: z.string(),
+      transactionId: z.string().optional(),
+      note: z.string().optional(),
+    })).mutation(async ({ input, ctx }) => {
+      await db.addUserDeposit({
+        userId: input.userId,
+        amount: input.amount,
+        paymentMethod: input.paymentMethod,
+        transactionId: input.transactionId,
+        note: input.note,
+        addedBy: ctx.user.id,
+      });
+      return { success: true };
+    }),
+
     updateRole: adminProcedure.input(z.object({
       userId: z.number(),
       role: z.enum(["user", "admin"]),
@@ -253,6 +293,11 @@ export const appRouter = router({
     })).mutation(async ({ input }) => {
       await db.updateWithdrawalStatus(input.id, input.status, input.adminNote);
       return { success: true };
+    }),
+
+    // Deposits
+    deposits: adminProcedure.query(async () => {
+      return db.getAllDeposits();
     }),
 
     // Notifications (admin sends to users)
@@ -276,18 +321,9 @@ export const appRouter = router({
       return db.getActivityLogs();
     }),
 
-    // Stats
+    // Stats - Complete platform statistics
     stats: adminProcedure.query(async () => {
-      const allUsers = await db.getAllUsers();
-      const allJobs = await db.getJobs();
-      const allWithdrawals = await db.getWithdrawalRequests();
-      const pendingWithdrawals = allWithdrawals.filter(w => w.status === "pending");
-      return {
-        totalUsers: allUsers.length,
-        totalJobs: allJobs.length,
-        totalWithdrawals: allWithdrawals.length,
-        pendingWithdrawals: pendingWithdrawals.length,
-      };
+      return db.getAdminStats();
     }),
   }),
 });
