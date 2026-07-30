@@ -121,6 +121,9 @@ importers:
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3
+      better-sqlite3:
+        specifier: ^13.0.2
+        version: 13.0.2
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -141,7 +144,7 @@ importers:
         version: 17.4.2
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(@types/pg@8.20.0)(mysql2@3.23.2(@types/node@24.7.0))(pg@8.22.0)
+        version: 0.45.2(@types/pg@8.20.0)(better-sqlite3@13.0.2)(mysql2@3.23.2(@types/node@24.7.0))(pg@8.22.0)
       embla-carousel-react:
         specifier: ^8.6.0
         version: 8.6.0(react@19.2.1)
@@ -2306,6 +2309,10 @@ packages:
     resolution: {integrity: sha512-GlF5wPWnSa/X5LKM1o0wz0suXIINz1iHRLvTS+sLyi7XPbe5ycmYI3DlZqVGZZtDgl4DmasFg7gOB3JYbphV5g==}
     hasBin: true
 
+  better-sqlite3@13.0.2:
+    resolution: {integrity: sha512-jW6oufeDhXZaiX9Lw5A+oerVClx4iFrI6uDj1zu7SqUAjak9vbJvA0NEcKLNxHiQHb6kYCoFzzXYV0YOauhV3g==}
+    engines: {node: '>=22'}
+
   body-parser@1.20.3:
     resolution: {integrity: sha512-7rAxByjUMqQ3/bHJy7D6OGXvx/MMc4IqBn/X0fcM1QUcAItpZrBEYhWGem+tzXH90c+G01ypMcYJBO9Y30203g==}
     engines: {node: '>= 0.8', npm: 1.2.8000 || >= 1.4.16}
@@ -3496,6 +3503,10 @@ packages:
     peerDependencies:
       react: ^16.8 || ^17 || ^18 || ^19 || ^19.0.0-rc
       react-dom: ^16.8 || ^17 || ^18 || ^19 || ^19.0.0-rc
+
+  node-addon-api@8.9.0:
+    resolution: {integrity: sha512-ekZMeaaIzSQTSpr7X2X3iJM7lTzgnx8ahAG9pJfT/7+14mlEM8ZYQ9cgCDvSSRbReFK0oHli3WrZdCiRsgAT9Q==}
+    engines: {node: ^18 || ^20 || >= 21}
 
   node-releases@2.0.23:
     resolution: {integrity: sha512-cCmFDMSm26S6tQSDpBCg/NR8NENrVPhAJSf+XbxBG4rPFaaonlEoE9wHQmun+cls499TQGSb7ZyPBRlzgKfpeg==}
@@ -6188,6 +6199,10 @@ snapshots:
 
   bcryptjs@3.0.3: {}
 
+  better-sqlite3@13.0.2:
+    dependencies:
+      node-addon-api: 8.9.0
+
   body-parser@1.20.3:
     dependencies:
       bytes: 3.1.2
@@ -6578,9 +6593,10 @@ snapshots:
       esbuild: 0.25.10
       tsx: 4.23.1
 
-  drizzle-orm@0.45.2(@types/pg@8.20.0)(mysql2@3.23.2(@types/node@24.7.0))(pg@8.22.0):
+  drizzle-orm@0.45.2(@types/pg@8.20.0)(better-sqlite3@13.0.2)(mysql2@3.23.2(@types/node@24.7.0))(pg@8.22.0):
     optionalDependencies:
       '@types/pg': 8.20.0
+      better-sqlite3: 13.0.2
       mysql2: 3.23.2(@types/node@24.7.0)
       pg: 8.22.0
 
@@ -7659,6 +7675,8 @@ snapshots:
     dependencies:
       react: 19.2.1
       react-dom: 19.2.1(react@19.2.1)
+
+  node-addon-api@8.9.0: {}
 
   node-releases@2.0.23: {}
 

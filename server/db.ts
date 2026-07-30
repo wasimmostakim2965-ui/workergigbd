@@ -14,12 +14,30 @@ import {
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
+// Check if we should use local database (fallback)
+const USE_LOCAL_DB = process.env.USE_LOCAL_DB === 'true' || !process.env.DATABASE_URL;
+
 let _db: ReturnType<typeof drizzle> | null = null;
+let _localDb: typeof import('./local-db').default | null = null;
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
 // Supabase's pooler requires SSL; `sslmode=require` in the connection string
 // also works, but this makes it explicit even if that's omitted.
 export async function getDb() {
+  // Use local database if env variable is set or DATABASE_URL is not available
+  if (USE_LOCAL_DB) {
+    if (!_localDb) {
+      try {
+        const localDbModule = await import('./local-db');
+        _localDb = localDbModule.default;
+        console.log("📦 Using LOCAL SQLite database (development mode)");
+      } catch (error) {
+        console.error("[Database] Failed to load local database:", error);
+      }
+    }
+    return null; // Return null but localDb is set
+  }
+  
   const dbUrl = process.env.DATABASE_URL || ENV.databaseUrl;
   if (!_db && dbUrl) {
     try {
@@ -28,12 +46,25 @@ export async function getDb() {
         ssl: { rejectUnauthorized: false },
       });
       _db = drizzle(pool);
+      console.log("✅ Connected to PostgreSQL database");
     } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
-      _db = null;
+      console.warn("[Database] Failed to connect to PostgreSQL:", error);
+      console.log("📦 Falling back to LOCAL SQLite database");
+      // Fallback to local database
+      try {
+        const localDbModule = await import('./local-db');
+        _localDb = localDbModule.default;
+      } catch (e) {
+        console.error("[Database] Failed to load local database:", e);
+      }
     }
   }
   return _db;
+}
+
+// Get local database instance
+export function getLocalDb() {
+  return _localDb;
 }
 
 // ─── Users ───────────────────────────────────────────────────────────────────

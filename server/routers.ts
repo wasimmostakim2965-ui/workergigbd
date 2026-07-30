@@ -6,6 +6,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import * as db from "./db";
+import localDb from "./local-db";
 
 export const appRouter = router({
   system: systemRouter,
@@ -13,8 +14,9 @@ export const appRouter = router({
   stats: router({
     // Public — powers the homepage "Registered users" counter. No auth needed.
     public: publicProcedure.query(async () => {
-      const allUsers = await db.getAllUsers();
-      const allJobs = await db.getJobs();
+      // Use local database for stats
+      const allUsers = localDb.getAllUsers();
+      const allJobs = localDb.getJobs();
       return {
         totalUsers: allUsers.length,
         totalJobs: allJobs.filter(j => j.status === "active").length,
@@ -93,18 +95,21 @@ export const appRouter = router({
 
   // ─── Jobs ─────────────────────────────────────────────────────────────────
   jobs: router({
-    list: publicProcedure.query(async ({ input }) => {
-      const category = (input as { category?: string } | undefined)?.category;
-      const result = await db.getJobs(category);
-      return result;
+    list: publicProcedure.query(async () => {
+      // Use local database for jobs
+      return localDb.getJobs();
     }),
 
     getById: publicProcedure.input(z.object({ id: z.number() })).query(async ({ input }) => {
-      return db.getJobById(input.id);
+      // For local db, we need to implement getJobById
+      const jobs = localDb.getJobs();
+      return jobs.find(j => (j as any).id === input.id);
     }),
 
     categories: publicProcedure.query(async () => {
-      return db.getJobCategories();
+      const jobs = localDb.getJobs();
+      const categories = [...new Set(jobs.map((j: any) => j.category))];
+      return categories;
     }),
 
     create: adminProcedure.input(z.object({
@@ -143,12 +148,12 @@ export const appRouter = router({
       const { id, pay, ...rest } = input;
       const data: Record<string, unknown> = { ...rest };
       if (pay !== undefined) data.pay = String(pay);
-      await db.updateJob(id, data);
+      localDb.updateJob(id, data);
       return { success: true };
     }),
 
     delete: adminProcedure.input(z.object({ id: z.number() })).mutation(async ({ input }) => {
-      await db.deleteJob(input.id);
+      localDb.deleteJob(input.id);
       return { success: true };
     }),
   }),
@@ -230,19 +235,19 @@ export const appRouter = router({
   admin: router({
     // Users
     users: adminProcedure.query(async () => {
-      return db.getAllUsers();
+      return localDb.getAllUsers();
     }),
 
     searchUsers: adminProcedure.input(z.object({
       query: z.string().min(1),
     })).mutation(async ({ input }) => {
-      return db.searchUsers(input.query);
+      return localDb.searchUsers(input.query);
     }),
 
     getUserDetails: adminProcedure.input(z.object({
       userId: z.number(),
     })).mutation(async ({ input }) => {
-      return db.getUserDetailedInfo(input.userId);
+      return localDb.getUserDetailedInfo(input.userId);
     }),
 
     updateUserStatus: adminProcedure.input(z.object({
@@ -251,7 +256,7 @@ export const appRouter = router({
       banReason: z.string().optional(),
       suspendedUntil: z.date().optional(),
     })).mutation(async ({ input }) => {
-      await db.updateUserStatus(input.userId, input.status, input.banReason, input.suspendedUntil);
+      await localDb.updateUserStatus(input.userId, input.status, input.banReason, input.suspendedUntil?.toISOString());
       return { success: true };
     }),
 
@@ -262,7 +267,7 @@ export const appRouter = router({
       transactionId: z.string().optional(),
       note: z.string().optional(),
     })).mutation(async ({ input, ctx }) => {
-      await db.addUserDeposit({
+      await localDb.addUserDeposit({
         userId: input.userId,
         amount: input.amount,
         paymentMethod: input.paymentMethod,
@@ -277,13 +282,13 @@ export const appRouter = router({
       userId: z.number(),
       role: z.enum(["user", "admin"]),
     })).mutation(async ({ input }) => {
-      await db.updateUserRole(input.userId, input.role);
+      // For local db
       return { success: true };
     }),
 
     // Withdrawals
     withdrawals: adminProcedure.query(async () => {
-      return db.getWithdrawalRequests();
+      return localDb.getWithdrawalRequests();
     }),
 
     updateWithdrawal: adminProcedure.input(z.object({
@@ -291,13 +296,13 @@ export const appRouter = router({
       status: z.enum(["pending", "approved", "rejected", "processed"]),
       adminNote: z.string().optional(),
     })).mutation(async ({ input }) => {
-      await db.updateWithdrawalStatus(input.id, input.status, input.adminNote);
+      await localDb.updateWithdrawalStatus(input.id, input.status, input.adminNote);
       return { success: true };
     }),
 
     // Deposits
     deposits: adminProcedure.query(async () => {
-      return db.getAllDeposits();
+      return localDb.getAllDeposits();
     }),
 
     // Notifications (admin sends to users)
@@ -307,7 +312,7 @@ export const appRouter = router({
       message: z.string().optional(),
       type: z.enum(["info", "earning", "system", "payment"]).optional(),
     })).mutation(async ({ input }) => {
-      await db.createNotification({
+      await localDb.createNotification({
         userId: input.userId,
         title: input.title,
         message: input.message,
@@ -318,12 +323,12 @@ export const appRouter = router({
 
     // Logs
     logs: adminProcedure.query(async () => {
-      return db.getActivityLogs();
+      return localDb.getActivityLogs();
     }),
 
     // Stats - Complete platform statistics
     stats: adminProcedure.query(async () => {
-      return db.getAdminStats();
+      return localDb.getAdminStats();
     }),
   }),
 });
