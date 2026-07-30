@@ -709,4 +709,4 @@ export async function getUserDepositList(userId: number) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(deposits).where(eq(deposits.userId, userId)).orderBy(desc(deposits.createdAt));
-} 
+}
