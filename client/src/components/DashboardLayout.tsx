@@ -18,11 +18,29 @@ import {
   HelpCircle,
   ChevronRight,
   MessageSquare,
+  Trophy,
+  CreditCard,
+  Clock,
+  TrendingUp,
+  History,
+  DollarSign,
+  Star,
+  Users,
+  Calendar,
+  PlusCircle,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -31,21 +49,47 @@ interface DashboardLayoutProps {
 const navItems = [
   { label: "Home", href: "/jobs", icon: Home },
   { label: "Jobs", href: "/jobs", icon: Briefcase },
-  { label: "Earnings", href: "/earnings", icon: Wallet },
+  { label: "My Earnings", href: "/earnings", icon: Wallet },
   { label: "Notifications", href: "/notifications", icon: Bell },
   { label: "Profile", href: "/profile", icon: User },
 ];
 
+// Sidebar menu items for mobile drawer
 const sidebarItems = [
-  { label: "Settings", icon: Settings },
-  { label: "Help", icon: HelpCircle },
-  { label: "Logout", icon: LogOut },
+  { label: "Dashboard", href: "/jobs", icon: Home },
+  { label: "Available Jobs", href: "/jobs", icon: Briefcase },
+  { label: "My Jobs", href: "/my-jobs", icon: Briefcase },
+  { label: "Post a Job", href: "/post-job", icon: Briefcase, highlight: true },
+  { label: "Earnings", href: "/earnings", icon: Wallet },
+  { label: "Withdraw History", href: "/withdraw-history", icon: History },
+  { label: "Deposit History", href: "/deposit-history", icon: History },
+  { label: "Leaderboard", href: "/leaderboard", icon: Trophy },
+  { label: "Notifications", href: "/notifications", icon: Bell },
+  { label: "Profile", href: "/profile", icon: User },
+  { label: "Settings", href: "/settings", icon: Settings },
+  { label: "Help & Support", href: "/help", icon: HelpCircle },
+];
+
+// Profile dropdown items
+const profileDropdownItems = [
+  { label: "My Profile", href: "/profile", icon: User },
+  { label: "Deposit", href: "/deposit", icon: CreditCard },
+  { label: "Withdraw", href: "/withdraw", icon: DollarSign },
+  { label: "Withdraw History", href: "/withdraw-history", icon: History },
+  { label: "Deposit History", href: "/deposit-history", icon: History },
+  { label: "Leaderboard", href: "/leaderboard", icon: Trophy },
+  { label: "Settings", href: "/settings", icon: Settings },
 ];
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [location, setLocation] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    setLocation("/");
+  };
 
   const userId = user?.id?.toString() || "0000000";
   const userName = user?.name || "User";
@@ -81,8 +125,51 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 </div>
               </SheetHeader>
               <Separator />
+              {/* Main Navigation */}
               <nav className="mt-4 space-y-1">
-                {navItems.map((item) => {
+                <p className="px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Main Menu</p>
+                {[
+                  { label: "Dashboard", href: "/jobs", icon: Home },
+                  { label: "Available Jobs", href: "/jobs", icon: Briefcase },
+                  { label: "My Jobs", href: "/my-jobs", icon: Briefcase },
+                  { label: "Post a Job", href: "/post-job", icon: PlusCircle, highlight: true },
+                ].map((item) => {
+                  const isActive = location === item.href;
+                  return (
+                    <button
+                      key={item.href}
+                      onClick={() => {
+                        setLocation(item.href);
+                        setSidebarOpen(false);
+                      }}
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                        isActive
+                          ? "bg-emerald-50 text-emerald-700"
+                          : item.highlight
+                          ? "bg-amber-50 text-amber-700 hover:bg-amber-100"
+                          : "text-foreground hover:bg-muted"
+                      }`}
+                    >
+                      <item.icon className="h-5 w-5" />
+                      {item.label}
+                      <ChevronRight className="h-4 w-4 ml-auto text-muted-foreground" />
+                    </button>
+                  );
+                })}
+              </nav>
+              
+              <Separator className="my-4" />
+              
+              {/* Finance Menu */}
+              <nav className="space-y-1">
+                <p className="px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Finance</p>
+                {[
+                  { label: "Earnings", href: "/earnings", icon: Wallet },
+                  { label: "Deposit", href: "/deposit", icon: CreditCard },
+                  { label: "Withdraw", href: "/withdraw", icon: DollarSign },
+                  { label: "Withdraw History", href: "/withdraw-history", icon: History },
+                  { label: "Deposit History", href: "/deposit-history", icon: History },
+                ].map((item) => {
                   const isActive = location === item.href;
                   return (
                     <button
@@ -104,25 +191,54 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   );
                 })}
               </nav>
+              
               <Separator className="my-4" />
+              
+              {/* Other Menu */}
               <nav className="space-y-1">
-                {sidebarItems.map((item) => (
-                  <button
-                    key={item.label}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors"
-                    onClick={() => {
-                      if (item.label === "Logout") {
-                        logout();
-                        setLocation("/");
-                      }
-                    }}
-                  >
-                    <item.icon className="h-5 w-5" />
-                    {item.label}
-                    <ChevronRight className="h-4 w-4 ml-auto text-muted-foreground" />
-                  </button>
-                ))}
+                <p className="px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Other</p>
+                {[
+                  { label: "Leaderboard", href: "/leaderboard", icon: Trophy },
+                  { label: "Notifications", href: "/notifications", icon: Bell },
+                  { label: "My Profile", href: "/profile", icon: User },
+                  { label: "Settings", href: "/settings", icon: Settings },
+                  { label: "Help & Support", href: "/help", icon: HelpCircle },
+                ].map((item) => {
+                  const isActive = location === item.href;
+                  return (
+                    <button
+                      key={item.href}
+                      onClick={() => {
+                        setLocation(item.href);
+                        setSidebarOpen(false);
+                      }}
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                        isActive
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "text-foreground hover:bg-muted"
+                      }`}
+                    >
+                      <item.icon className="h-5 w-5" />
+                      {item.label}
+                      <ChevronRight className="h-4 w-4 ml-auto text-muted-foreground" />
+                    </button>
+                  );
+                })}
               </nav>
+              
+              <Separator className="my-4" />
+              
+              {/* Logout Button */}
+              <button
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+                onClick={() => {
+                  handleLogout();
+                  setSidebarOpen(false);
+                }}
+              >
+                <LogOut className="h-5 w-5" />
+                Logout
+              </button>
             </SheetContent>
           </Sheet>
 
@@ -142,12 +258,47 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <Bell className="h-5 w-5 text-white" />
               <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-emerald-400 rounded-full border border-white" />
             </button>
-            <Avatar className="h-9 w-9 border-2 border-white/40 shadow-sm">
-              <AvatarImage src="/manus-storage/workergigbd-logo_1438f192.png" />
-              <AvatarFallback className="bg-emerald-600 text-white text-sm font-bold">
-                {userName.charAt(0).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
+            
+            {/* Profile Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Avatar className="h-9 w-9 border-2 border-white/40 shadow-sm cursor-pointer hover:border-emerald-400 transition-colors">
+                  <AvatarImage src="/manus-storage/workergigbd-logo_1438f192.png" />
+                  <AvatarFallback className="bg-emerald-600 text-white text-sm font-bold">
+                    {userName.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="font-normal">
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium leading-none">{userName}</p>
+                    <p className="text-xs leading-none text-muted-foreground">
+                      ID: {userId}
+                    </p>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {profileDropdownItems.map((item) => (
+                  <DropdownMenuItem 
+                    key={item.href}
+                    onClick={() => setLocation(item.href)}
+                    className="cursor-pointer"
+                  >
+                    <item.icon className="mr-2 h-4 w-4" />
+                    {item.label}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem 
+                  onClick={handleLogout}
+                  className="cursor-pointer text-red-600 focus:text-red-600"
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 

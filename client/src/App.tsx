@@ -15,6 +15,15 @@ import JobsPage from "./pages/JobsPage";
 import EarningsPage from "./pages/EarningsPage";
 import ProfilePage from "./pages/ProfilePage";
 import NotificationsPage from "./pages/NotificationsPage";
+import MyJobsPage from "./pages/MyJobsPage";
+import PostJobPage from "./pages/PostJobPage";
+import DepositPage from "./pages/DepositPage";
+import WithdrawPage from "./pages/WithdrawPage";
+import WithdrawHistoryPage from "./pages/WithdrawHistoryPage";
+import DepositHistoryPage from "./pages/DepositHistoryPage";
+import LeaderboardPage from "./pages/LeaderboardPage";
+import SettingsPage from "./pages/SettingsPage";
+import HelpPage from "./pages/HelpPage";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminJobs from "./pages/admin/AdminJobs";
@@ -42,6 +51,15 @@ function Router() {
       <Route path={"/earnings"} component={() => <DashboardLayout><EarningsPage /></DashboardLayout>} />
       <Route path={"/profile"} component={() => <DashboardLayout><ProfilePage /></DashboardLayout>} />
       <Route path={"/notifications"} component={() => <DashboardLayout><NotificationsPage /></DashboardLayout>} />
+      <Route path={"/my-jobs"} component={() => <DashboardLayout><MyJobsPage /></DashboardLayout>} />
+      <Route path={"/post-job"} component={() => <DashboardLayout><PostJobPage /></DashboardLayout>} />
+      <Route path={"/deposit"} component={() => <DashboardLayout><DepositPage /></DashboardLayout>} />
+      <Route path={"/withdraw"} component={() => <DashboardLayout><WithdrawPage /></DashboardLayout>} />
+      <Route path={"/withdraw-history"} component={() => <DashboardLayout><WithdrawHistoryPage /></DashboardLayout>} />
+      <Route path={"/deposit-history"} component={() => <DashboardLayout><DepositHistoryPage /></DashboardLayout>} />
+      <Route path={"/leaderboard"} component={() => <DashboardLayout><LeaderboardPage /></DashboardLayout>} />
+      <Route path={"/settings"} component={() => <DashboardLayout><SettingsPage /></DashboardLayout>} />
+      <Route path={"/help"} component={() => <DashboardLayout><HelpPage /></DashboardLayout>} />
 
       {/* Admin Panel */}
       <Route path={"/admin"} component={() => <AdminLayout><AdminDashboard /></AdminLayout>} />

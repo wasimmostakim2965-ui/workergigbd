@@ -26,9 +26,18 @@ import {
   Briefcase,
   Wallet,
   X,
+  Lock,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { Button } from "./ui/button";
+import { useState, useEffect } from "react";
+import { Input } from "./ui/input";
+import { toast } from "sonner";
+
+// Admin password
+const ADMIN_PASSWORD = "Wasim@2965";
 
 const adminMenuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/admin" },
@@ -134,8 +143,105 @@ function AdminSidebarContent({ children }: { children: React.ReactNode }) {
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { loading, user, logout } = useAuth();
   const [, setLocation] = useLocation();
+  const [isPasswordVerified, setIsPasswordVerified] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState(false);
 
-  // Redirect to home if not admin
+  // Check session storage for password verification
+  useEffect(() => {
+    const stored = sessionStorage.getItem("admin_password_verified");
+    if (stored === "true") {
+      setIsPasswordVerified(true);
+    }
+  }, []);
+
+  const handlePasswordSubmit = () => {
+    if (passwordInput === ADMIN_PASSWORD) {
+      setIsPasswordVerified(true);
+      setPasswordError(false);
+      sessionStorage.setItem("admin_password_verified", "true");
+      toast.success("Access granted!");
+    } else {
+      setPasswordError(true);
+      toast.error("Incorrect password!");
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handlePasswordSubmit();
+    }
+  };
+
+  // Password screen
+  if (!isPasswordVerified) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+        <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 shadow-2xl">
+          <div className="flex flex-col items-center gap-6">
+            <div className="p-4 bg-amber-500/20 rounded-full">
+              <Lock className="h-12 w-12 text-amber-400" />
+            </div>
+            <h1 className="text-2xl font-bold text-white tracking-tight text-center">
+              Admin Panel
+            </h1>
+            <p className="text-sm text-slate-400 text-center max-w-sm">
+              Enter password to access the admin panel
+            </p>
+          </div>
+          
+          <div className="w-full space-y-4">
+            <div className="relative">
+              <Input
+                type={showPassword ? "text" : "password"}
+                placeholder="Enter password..."
+                value={passwordInput}
+                onChange={(e) => {
+                  setPasswordInput(e.target.value);
+                  setPasswordError(false);
+                }}
+                onKeyPress={handleKeyPress}
+                className={`pr-12 bg-white/10 border-white/20 text-white placeholder:text-slate-500 ${
+                  passwordError ? "border-red-500 focus:border-red-500" : ""
+                }`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            
+            {passwordError && (
+              <p className="text-red-400 text-sm text-center">
+                Incorrect password. Please try again.
+              </p>
+            )}
+            
+            <Button
+              onClick={handlePasswordSubmit}
+              className="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold"
+            >
+              Unlock
+            </Button>
+          </div>
+          
+          <Button
+            variant="ghost"
+            onClick={() => setLocation("/")}
+            className="text-slate-400 hover:text-white"
+          >
+            ← Back to Home
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Redirect to home if not admin (even after password verification)
   if (!loading && user && user.role !== "admin") {
     setLocation("/");
     return null;
