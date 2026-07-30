@@ -30,16 +30,8 @@ const categories = [
   { id: "design", label: "Design" },
 ];
 
-const locations = [
-  { id: "all", label: "All Locations" },
-  { id: "bd", label: "Bangladesh" },
-  { id: "in", label: "India" },
-  { id: "global", label: "Global" },
-];
-
 export default function JobsPage() {
   const [selectedCategory, setSelectedCategory] = useState("all");
-  const [selectedLocation, setSelectedLocation] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
 
   const { data: jobs, isLoading } = trpc.jobs.list.useQuery();
@@ -69,20 +61,6 @@ export default function JobsPage() {
               {categories.map((cat) => (
                 <SelectItem key={cat.id} value={cat.id}>
                   {cat.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex-1">
-          <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-            <SelectTrigger className="h-10 bg-white border-slate-200 text-sm shadow-soft">
-              <SelectValue placeholder="Location" />
-            </SelectTrigger>
-            <SelectContent>
-              {locations.map((loc) => (
-                <SelectItem key={loc.id} value={loc.id}>
-                  {loc.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -170,6 +148,13 @@ function JobCard({ job }: { job: any }) {
   const pay = Number(job.pay) || 0;
   const isHighValue = pay >= 0.5;
   const isTopJob = job.isTopJob === 1;
+  
+  // Shorten description to 60 chars max
+  const shortDesc = job.description 
+    ? job.description.length > 60 
+      ? job.description.substring(0, 60) + "..." 
+      : job.description
+    : "";
 
   return (
     <motion.div
@@ -199,7 +184,9 @@ function JobCard({ job }: { job: any }) {
           <h3 className="font-heading font-semibold text-sm text-slate-800 leading-tight">
             {job.title}
           </h3>
-          <p className="text-xs text-slate-500 mt-1">{job.description || job.title}</p>
+          {shortDesc && (
+            <p className="text-xs text-slate-500 mt-1">{shortDesc}</p>
+          )}
         </div>
         <div className="text-right ml-3 shrink-0">
           <p className={`font-mono text-lg font-bold ${isHighValue ? "text-emerald-600" : "text-sky-600"}`}>

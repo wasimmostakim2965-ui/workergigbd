@@ -2,6 +2,12 @@ import type { Express } from "express";
 import { ENV } from "./env";
 
 export function registerStorageProxy(app: Express) {
+  // Don't register storage proxy if not configured - completely skip
+  if (!ENV.forgeApiUrl || !ENV.forgeApiKey) {
+    console.log("[StorageProxy] Not configured, skipping...");
+    return;
+  }
+
   app.get("/manus-storage/*", async (req, res) => {
     const key = (req.params as Record<string, string>)[0];
     if (!key) {
@@ -9,12 +15,10 @@ export function registerStorageProxy(app: Express) {
       return;
     }
 
-    if (!ENV.forgeApiUrl || !ENV.forgeApiKey) {
-      res.status(500).send("Storage proxy not configured");
-      return;
-    }
-
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000); // 3s timeout
+
       const forgeUrl = new URL(
         "v1/storage/presign/get",
         ENV.forgeApiUrl.replace(/\/+$/, "") + "/",
@@ -23,7 +27,10 @@ export function registerStorageProxy(app: Express) {
 
       const forgeResp = await fetch(forgeUrl, {
         headers: { Authorization: `Bearer ${ENV.forgeApiKey}` },
+        signal: controller.signal,
       });
+
+      clearTimeout(timeout);
 
       if (!forgeResp.ok) {
         const body = await forgeResp.text().catch(() => "");
@@ -40,9 +47,13 @@ export function registerStorageProxy(app: Express) {
 
       res.set("Cache-Control", "no-store");
       res.redirect(307, url);
-    } catch (err) {
-      console.error("[StorageProxy] failed:", err);
-      res.status(502).send("Storage proxy error");
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        console.error("[StorageProxy] timeout");
+      } else {
+        console.error("[StorageProxy] failed:", err.message);
+      }
+      res.status(504).send("Storage timeout");
     }
   });
 }
