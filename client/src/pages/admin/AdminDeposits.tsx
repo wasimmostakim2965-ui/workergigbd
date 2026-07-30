@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -17,8 +18,6 @@ export default function AdminDeposits() {
   const [showApproveDialog, setShowApproveDialog] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [adminNote, setAdminNote] = useState("");
-  const [transactionId, setTransactionId] = useState("");
-  const [amount, setAmount] = useState("");
 
   const utils = trpc.useUtils();
 
@@ -26,7 +25,7 @@ export default function AdminDeposits() {
 
   const updateMutation = trpc.admin.updateDeposit.useMutation({
     onSuccess: () => {
-      toast.success("Deposit updated!");
+      toast.success("Deposit updated successfully!");
       utils.admin.deposits.invalidate();
       setShowApproveDialog(false);
       setShowRejectDialog(false);
@@ -70,11 +69,14 @@ export default function AdminDeposits() {
     if (statusFilter !== "all" && d.status !== statusFilter) return false;
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
+      const userInfo = d.userInfo || {};
       return (
-        d.userName?.toLowerCase().includes(query) ||
-        d.userEmail?.toLowerCase().includes(query) ||
+        userInfo.name?.toLowerCase().includes(query) ||
+        userInfo.email?.toLowerCase().includes(query) ||
+        userInfo.userId?.includes(searchQuery) ||
+        String(d.userId).includes(searchQuery) ||
         d.transactionId?.toLowerCase().includes(query) ||
-        String(d.userId).includes(searchQuery)
+        d.paymentNumber?.includes(query)
       );
     }
     return true;
@@ -88,14 +90,8 @@ export default function AdminDeposits() {
     rejected: (deposits || []).filter((d: any) => d.status === 'rejected').length,
     pendingAmount: (deposits || [])
       .filter((d: any) => d.status === 'pending')
-      .reduce((sum: number, d: any) => sum + Number(d.amount), 0),
-    totalAmount: (deposits || [])
-      .filter((d: any) => d.status === 'approved')
       .reduce((sum: number, d: any) => sum + Number(d.amount), 0)
   };
-
-  // Admin bKash number
-  const ADMIN_BKASH = "01338882758";
 
   const handleApprove = () => {
     if (selectedRequest) {
@@ -123,16 +119,12 @@ export default function AdminDeposits() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="font-heading text-2xl font-bold text-foreground">Deposit Requests</h1>
-          <p className="text-muted-foreground text-sm mt-1">Review and process user deposit requests</p>
+          <p className="text-muted-foreground text-sm mt-1">Verify and approve user deposit requests</p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Admin bKash:</span>
-          <span className="font-mono font-bold text-primary">{ADMIN_BKASH}</span>
-          <Button variant="outline" size="sm" onClick={() => refetch()}>
-            <RefreshCw className="h-4 w-4 mr-1" />
-            Refresh
-          </Button>
-        </div>
+        <Button variant="outline" size="sm" onClick={() => refetch()}>
+          <RefreshCw className="h-4 w-4 mr-1" />
+          Refresh
+        </Button>
       </div>
 
       {/* Stats Cards */}
@@ -174,7 +166,7 @@ export default function AdminDeposits() {
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by User, Transaction ID..."
+            placeholder="Search by User ID, Transaction ID, Phone..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
@@ -220,10 +212,11 @@ export default function AdminDeposits() {
               <table className="w-full text-sm">
                 <thead className="bg-muted/50 sticky top-0">
                   <tr>
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">User</th>
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Transaction ID</th>
+                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">User ID</th>
+                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Phone Number</th>
                     <th className="text-left py-3 px-4 font-medium text-muted-foreground">Amount</th>
                     <th className="text-left py-3 px-4 font-medium text-muted-foreground">Method</th>
+                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Transaction ID</th>
                     <th className="text-left py-3 px-4 font-medium text-muted-foreground">Status</th>
                     <th className="text-left py-3 px-4 font-medium text-muted-foreground">Date</th>
                     <th className="text-left py-3 px-4 font-medium text-muted-foreground">Actions</th>
@@ -235,22 +228,28 @@ export default function AdminDeposits() {
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-xs">
-                            {d.userName?.charAt(0).toUpperCase() || "U"}
+                            {d.userInfo?.name?.charAt(0).toUpperCase() || "U"}
                           </div>
                           <div>
-                            <p className="font-medium">{d.userName || "Unknown"}</p>
-                            <p className="text-xs text-muted-foreground font-mono">ID: {d.userId}</p>
+                            <p className="font-medium">{d.userInfo?.name || "Unknown"}</p>
+                            <p className="text-xs text-muted-foreground font-mono">ID: {d.userInfo?.userId || d.userId}</p>
                           </div>
                         </div>
                       </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-1">
+                          <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="font-mono text-xs">{d.paymentNumber || "N/A"}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 font-bold text-emerald-600">{formatCurrency(d.amount)}</td>
+                      <td className="py-3 px-4">{getMethodBadge(d.paymentMethod)}</td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-1">
                           <FileText className="h-3.5 w-3.5 text-muted-foreground" />
                           <span className="font-mono text-xs">{d.transactionId || "N/A"}</span>
                         </div>
                       </td>
-                      <td className="py-3 px-4 font-bold text-emerald-600">{formatCurrency(d.amount)}</td>
-                      <td className="py-3 px-4">{getMethodBadge(d.paymentMethod)}</td>
                       <td className="py-3 px-4">{getStatusBadge(d.status)}</td>
                       <td className="py-3 px-4 text-muted-foreground text-xs">{format(new Date(d.createdAt), 'PP p')}</td>
                       <td className="py-3 px-4">
@@ -265,6 +264,7 @@ export default function AdminDeposits() {
                               }}
                             >
                               <CheckCircle className="h-3 w-3 mr-1" />
+                              Approve
                             </Button>
                             <Button
                               size="sm"
@@ -275,6 +275,7 @@ export default function AdminDeposits() {
                               }}
                             >
                               <XCircle className="h-3 w-3 mr-1" />
+                              Reject
                             </Button>
                           </div>
                         )}
@@ -293,22 +294,6 @@ export default function AdminDeposits() {
         </CardContent>
       </Card>
 
-      {/* Info Card */}
-      <Card className="bg-blue-50 border-blue-200">
-        <CardContent className="p-4">
-          <div className="flex items-start gap-3">
-            <CreditCard className="h-5 w-5 text-blue-600 mt-0.5" />
-            <div>
-              <p className="font-medium text-blue-800">Deposit Information</p>
-              <p className="text-sm text-blue-700 mt-1">
-                <strong>Admin bKash Number:</strong> {ADMIN_BKASH}<br/>
-                Users should send money to this number and provide the transaction ID when requesting a deposit.
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Approve Dialog */}
       <Dialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
         <DialogContent>
@@ -320,27 +305,43 @@ export default function AdminDeposits() {
           {selectedRequest && (
             <div className="space-y-4 py-4">
               <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                <p className="font-medium text-emerald-800 mb-3">Deposit Details</p>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <p className="text-muted-foreground">User</p>
-                    <p className="font-medium">{selectedRequest.userName || "Unknown"}</p>
+                    <p className="font-medium">{selectedRequest.userInfo?.name || "Unknown"}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">User ID</p>
-                    <p className="font-mono font-medium">{selectedRequest.userId}</p>
+                    <p className="font-mono font-medium">{selectedRequest.userInfo?.userId || selectedRequest.userId}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Phone Number</p>
+                    <p className="font-mono">{selectedRequest.paymentNumber || "N/A"}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Amount</p>
                     <p className="font-bold text-emerald-600 text-lg">{formatCurrency(selectedRequest.amount)}</p>
                   </div>
                   <div>
+                    <p className="text-muted-foreground">Method</p>
+                    <p className="font-medium capitalize">{selectedRequest.paymentMethod}</p>
+                  </div>
+                  <div className="col-span-2">
                     <p className="text-muted-foreground">Transaction ID</p>
                     <p className="font-mono">{selectedRequest.transactionId || "N/A"}</p>
                   </div>
                 </div>
               </div>
+              
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-800">
+                  <strong>Note:</strong> Upon approval, {formatCurrency(selectedRequest.amount)} will be automatically added to the user's deposit balance.
+                </p>
+              </div>
+              
               <div className="space-y-2">
-                <label className="text-sm font-medium">Admin Note (Optional)</label>
+                <Label>Admin Note (Optional)</Label>
                 <Textarea
                   placeholder="Add a note..."
                   value={adminNote}
@@ -357,7 +358,7 @@ export default function AdminDeposits() {
               onClick={handleApprove}
               disabled={updateMutation.isPending}
             >
-              {updateMutation.isPending ? "Processing..." : "Approve Deposit"}
+              {updateMutation.isPending ? "Processing..." : "Approve & Add to Balance"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -381,16 +382,20 @@ export default function AdminDeposits() {
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <p className="text-muted-foreground">User</p>
-                    <p className="font-medium">{selectedRequest.userName || "Unknown"}</p>
+                    <p className="font-medium">{selectedRequest.userInfo?.name || "Unknown"}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Amount</p>
                     <p className="font-bold text-red-600">{formatCurrency(selectedRequest.amount)}</p>
                   </div>
+                  <div>
+                    <p className="text-muted-foreground">Transaction ID</p>
+                    <p className="font-mono">{selectedRequest.transactionId || "N/A"}</p>
+                  </div>
                 </div>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Reason for Rejection (Required)</label>
+                <Label>Reason for Rejection (Optional)</Label>
                 <Textarea
                   placeholder="Enter reason for rejection..."
                   value={adminNote}

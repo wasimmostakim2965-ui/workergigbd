@@ -139,10 +139,13 @@ export const deposits = pgTable("deposits", {
   userId: integer("userId").notNull(),
   amount: decimal("amount", { precision: 10, scale: 3 }).notNull(),
   paymentMethod: varchar("paymentMethod", { length: 50 }).notNull(),
+  paymentNumber: varchar("paymentNumber", { length: 20 }), // User's phone number
   transactionId: varchar("transactionId", { length: 100 }),
   note: text("note"), // Admin note
-  status: depositStatusEnum("status").default("approved").notNull(),
+  status: depositStatusEnum("status").default("pending").notNull(), // Default to pending
   addedBy: integer("addedBy").notNull(), // Admin who added
+  processedBy: integer("processedBy"),
+  processedAt: timestamp("processedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

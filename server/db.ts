@@ -520,6 +520,40 @@ export async function generateUniqueUserId(): Promise<string> {
 // ─── User Balance Management ─────────────────────────────────────────────────
 
 /**
+ * Create deposit request (User action)
+ */
+export async function createDepositRequest(data: {
+  userId: number;
+  amount: number;
+  paymentMethod: string;
+  paymentNumber: string;
+  transactionId: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  // Insert deposit request with pending status
+  const result = await db.insert(deposits).values({
+    userId: data.userId,
+    amount: String(data.amount),
+    paymentMethod: data.paymentMethod,
+    paymentNumber: data.paymentNumber,
+    transactionId: data.transactionId,
+    addedBy: data.userId, // Self-deposit
+    status: "pending",
+  });
+  
+  // Log activity
+  await logActivity({
+    userId: data.userId,
+    action: "DEPOSIT_REQUEST",
+    details: `Deposit request: ৳${data.amount} via ${data.paymentMethod}, TXN: ${data.transactionId}`,
+  });
+  
+  return result;
+}
+
+/**
  * Add deposit to user account (Admin action)
  */
 export async function addUserDeposit(data: {
@@ -527,6 +561,7 @@ export async function addUserDeposit(data: {
   amount: number;
   paymentMethod: string;
   transactionId?: string;
+  paymentNumber?: string;
   note?: string;
   addedBy: number;
 }) {
@@ -538,6 +573,7 @@ export async function addUserDeposit(data: {
     userId: data.userId,
     amount: String(data.amount),
     paymentMethod: data.paymentMethod,
+    paymentNumber: data.paymentNumber || null,
     transactionId: data.transactionId || null,
     note: data.note || null,
     addedBy: data.addedBy,
@@ -774,7 +810,27 @@ export async function getUserDetailedInfo(userId: number): Promise<UserDetailedI
 export async function getAllDeposits() {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(deposits).orderBy(desc(deposits.createdAt));
+  
+  // Get all deposits with user info
+  const result = await db
+    .select({
+      deposit: deposits,
+      user: {
+        userId: users.userId,
+        name: users.name,
+        email: users.email,
+        phone: users.phone,
+      }
+    })
+    .from(deposits)
+    .leftJoin(users, eq(deposits.userId, users.id))
+    .orderBy(desc(deposits.createdAt));
+  
+  // Transform to include user info
+  return result.map(row => ({
+    ...row.deposit,
+    userInfo: row.user
+  }));
 }
 
 export async function getUserDepositList(userId: number) {
@@ -783,16 +839,69 @@ export async function getUserDepositList(userId: number) {
   return db.select().from(deposits).where(eq(deposits.userId, userId)).orderBy(desc(deposits.createdAt));
 }
 
-export async function updateDepositStatus(id: number, status: "pending" | "approved" | "rejected", adminNote?: string) {
+export async function updateDepositStatus(id: number, status: "pending" | "approved" | "rejected", adminNote?: string, processedBy?: number) {
   const db = await getDb();
   if (!db) return;
   
+  // Get deposit info first
+  const depositResult = await db.select().from(deposits).where(eq(deposits.id, id)).limit(1);
+  const deposit = depositResult[0];
+  
+  if (!deposit) return;
+  
+  // Update deposit status
   await db.update(deposits)
     .set({ 
       status,
       note: adminNote || undefined,
+      processedBy: processedBy,
+      processedAt: new Date(),
     })
     .where(eq(deposits.id, id));
+  
+  // If approved, add to user balance
+  if (status === "approved") {
+    const amount = Number(deposit.amount);
+    
+    // Update user balance
+    await db.insert(userBalances).values({
+      userId: deposit.userId,
+      deposit: String(amount),
+    }).onConflictDoUpdate({
+      target: userBalances.userId,
+      set: { deposit: sql`${userBalances.deposit} + ${amount}` },
+    });
+    
+    // Log activity
+    await logActivity({
+      userId: deposit.userId,
+      action: "DEPOSIT_APPROVED",
+      details: `Deposit approved: ৳${amount} via ${deposit.paymentMethod}, TXN: ${deposit.transactionId || "N/A"}`,
+    });
+    
+    // Send notification
+    await createNotification({
+      userId: deposit.userId,
+      title: "Deposit Approved",
+      message: `Your deposit of ৳${amount} has been approved and added to your account.`,
+      type: "payment",
+    });
+  } else if (status === "rejected") {
+    // Log activity
+    await logActivity({
+      userId: deposit.userId,
+      action: "DEPOSIT_REJECTED",
+      details: `Deposit rejected: ৳${deposit.amount} via ${deposit.paymentMethod}. Reason: ${adminNote || "No reason provided"}`,
+    });
+    
+    // Send notification
+    await createNotification({
+      userId: deposit.userId,
+      title: "Deposit Rejected",
+      message: `Your deposit of ৳${deposit.amount} has been rejected. ${adminNote ? `Reason: ${adminNote}` : ""}`,
+      type: "payment",
+    });
+  }
 }
 
 // ─── Support Messages ─────────────────────────────────────────────────────────

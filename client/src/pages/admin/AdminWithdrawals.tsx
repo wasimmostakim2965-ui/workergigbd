@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Wallet, CheckCircle, XCircle, Clock, Search, Filter, RefreshCw, Phone, CreditCard, User, AlertCircle } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Wallet, CheckCircle, XCircle, Clock, Search, RefreshCw, Phone, CreditCard, User, AlertCircle } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -24,7 +25,7 @@ export default function AdminWithdrawals() {
 
   const updateMutation = trpc.admin.updateWithdrawal.useMutation({
     onSuccess: () => {
-      toast.success("Withdrawal updated!");
+      toast.success("Withdrawal updated successfully!");
       utils.admin.withdrawals.invalidate();
       setShowApproveDialog(false);
       setShowRejectDialog(false);
@@ -74,9 +75,10 @@ export default function AdminWithdrawals() {
       return (
         userInfo.name?.toLowerCase().includes(query) ||
         userInfo.email?.toLowerCase().includes(query) ||
-        userInfo.userId?.includes(searchQuery) ||
-        w.paymentNumber?.includes(searchQuery) ||
-        String(w.userId).includes(searchQuery)
+        userInfo.userId?.includes(query) ||
+        userInfo.phone?.includes(query) ||
+        String(w.userId).includes(searchQuery) ||
+        w.paymentNumber?.includes(query)
       );
     }
     return true;
@@ -119,7 +121,7 @@ export default function AdminWithdrawals() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="font-heading text-2xl font-bold text-foreground">Withdrawal Requests</h1>
-          <p className="text-muted-foreground text-sm mt-1">Review and process user withdrawals</p>
+          <p className="text-muted-foreground text-sm mt-1">Process user withdrawal requests</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => refetch()}>
           <RefreshCw className="h-4 w-4 mr-1" />
@@ -166,7 +168,7 @@ export default function AdminWithdrawals() {
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by User ID, Name, Email, Phone, Number..."
+            placeholder="Search by User ID, Name, Phone..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
@@ -212,10 +214,10 @@ export default function AdminWithdrawals() {
               <table className="w-full text-sm">
                 <thead className="bg-muted/50 sticky top-0">
                   <tr>
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">User</th>
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Amount</th>
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Method</th>
+                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">User ID</th>
                     <th className="text-left py-3 px-4 font-medium text-muted-foreground">Phone Number</th>
+                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Amount</th>
+                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Payment Method</th>
                     <th className="text-left py-3 px-4 font-medium text-muted-foreground">Status</th>
                     <th className="text-left py-3 px-4 font-medium text-muted-foreground">Date</th>
                     <th className="text-left py-3 px-4 font-medium text-muted-foreground">Actions</th>
@@ -235,9 +237,14 @@ export default function AdminWithdrawals() {
                           </div>
                         </div>
                       </td>
-                      <td className="py-3 px-4 font-bold text-emerald-600">{formatCurrency(w.amount)}</td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-1">
+                          <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="font-mono text-xs">{w.paymentNumber}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 font-bold text-red-600">{formatCurrency(w.amount)}</td>
                       <td className="py-3 px-4">{getMethodBadge(w.paymentMethod)}</td>
-                      <td className="py-3 px-4 font-mono text-xs">{w.paymentNumber}</td>
                       <td className="py-3 px-4">{getStatusBadge(w.status)}</td>
                       <td className="py-3 px-4 text-muted-foreground text-xs">{format(new Date(w.createdAt), 'PP p')}</td>
                       <td className="py-3 px-4">
@@ -252,6 +259,7 @@ export default function AdminWithdrawals() {
                               }}
                             >
                               <CheckCircle className="h-3 w-3 mr-1" />
+                              Approve
                             </Button>
                             <Button
                               size="sm"
@@ -262,6 +270,7 @@ export default function AdminWithdrawals() {
                               }}
                             >
                               <XCircle className="h-3 w-3 mr-1" />
+                              Reject
                             </Button>
                           </div>
                         )}
@@ -280,6 +289,22 @@ export default function AdminWithdrawals() {
         </CardContent>
       </Card>
 
+      {/* Info Card */}
+      <Card className="bg-blue-50 border-blue-200">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3">
+            <CreditCard className="h-5 w-5 text-blue-600 mt-0.5" />
+            <div className="text-sm text-blue-800">
+              <p className="font-medium">Withdrawal Processing:</p>
+              <p className="text-blue-700 mt-1">
+                Withdrawals are processed manually. When approved, you need to send the payment to the user's phone number.
+                The amount will be deducted from the user's earning balance upon approval.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Approve Dialog */}
       <Dialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
         <DialogContent>
@@ -291,6 +316,7 @@ export default function AdminWithdrawals() {
           {selectedRequest && (
             <div className="space-y-4 py-4">
               <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                <p className="font-medium text-emerald-800 mb-3">Withdrawal Details</p>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <p className="text-muted-foreground">User</p>
@@ -301,21 +327,28 @@ export default function AdminWithdrawals() {
                     <p className="font-mono font-medium">{selectedRequest.userInfo?.userId || selectedRequest.userId}</p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Amount</p>
-                    <p className="font-bold text-emerald-600 text-lg">{formatCurrency(selectedRequest.amount)}</p>
+                    <p className="text-muted-foreground">Phone Number</p>
+                    <p className="font-mono font-bold">{selectedRequest.paymentNumber}</p>
                   </div>
                   <div>
+                    <p className="text-muted-foreground">Amount</p>
+                    <p className="font-bold text-red-600 text-lg">{formatCurrency(selectedRequest.amount)}</p>
+                  </div>
+                  <div className="col-span-2">
                     <p className="text-muted-foreground">Payment Method</p>
                     <p className="font-medium capitalize">{selectedRequest.paymentMethod}</p>
                   </div>
-                  <div>
-                    <p className="text-muted-foreground">Phone Number</p>
-                    <p className="font-mono">{selectedRequest.paymentNumber}</p>
-                  </div>
                 </div>
               </div>
+              
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-800">
+                  <strong>Manual Action Required:</strong> Send {formatCurrency(selectedRequest.amount)} to <strong>{selectedRequest.paymentNumber}</strong> via {selectedRequest.paymentMethod} and mark as processed.
+                </p>
+              </div>
+              
               <div className="space-y-2">
-                <label className="text-sm font-medium">Admin Note (Optional)</label>
+                <Label>Admin Note (Optional)</Label>
                 <Textarea
                   placeholder="Add a note..."
                   value={adminNote}
@@ -365,7 +398,7 @@ export default function AdminWithdrawals() {
                 </div>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Reason for Rejection (Required)</label>
+                <Label>Reason for Rejection (Optional)</Label>
                 <Textarea
                   placeholder="Enter reason for rejection..."
                   value={adminNote}

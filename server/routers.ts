@@ -241,6 +241,34 @@ export const appRouter = router({
     userWithdrawals: protectedProcedure.query(async ({ ctx }) => {
       return db.getUserWithdrawals(ctx.user.id);
     }),
+
+    // Deposit Request
+    requestDeposit: protectedProcedure.input(z.object({
+      amount: z.union([z.number().min(110), z.string().regex(/^\d+(\.\d+)?$/)]), // Minimum 110 BDT (1 USD)
+      paymentMethod: z.string().min(1),
+      paymentNumber: z.string().min(1), // User's phone number
+      transactionId: z.string().min(1),
+    })).mutation(async ({ input, ctx }) => {
+      const amount = Number(input.amount);
+      
+      // Minimum deposit is 110 BDT (1 USD)
+      if (amount < 110) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Minimum deposit amount is ৳110 (1 USD)",
+        });
+      }
+      
+      await db.createDepositRequest({
+        userId: ctx.user.id,
+        amount,
+        paymentMethod: input.paymentMethod,
+        paymentNumber: input.paymentNumber,
+        transactionId: input.transactionId,
+      });
+      
+      return { success: true };
+    }),
   }),
 
   // ─── Notifications ─────────────────────────────────────────────────────────
@@ -348,8 +376,8 @@ export const appRouter = router({
       id: z.number(),
       status: z.enum(["pending", "approved", "rejected"]),
       adminNote: z.string().optional(),
-    })).mutation(async ({ input }) => {
-      await db.updateDepositStatus(input.id, input.status, input.adminNote);
+    })).mutation(async ({ input, ctx }) => {
+      await db.updateDepositStatus(input.id, input.status, input.adminNote, ctx.user.id);
       return { success: true };
     }),
 
