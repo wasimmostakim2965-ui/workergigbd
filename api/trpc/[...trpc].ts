@@ -753,7 +753,7 @@ export const appRouter = router({
         
         // Update deposit status
         await query(
-          `UPDATE deposits SET status = $1, note = $2, "processedAt" = NOW() WHERE id = $3`,
+          `UPDATE deposits SET status = $1, note = $2 WHERE id = $3`,
           [input.status, input.adminNote || null, input.id]
         );
         
