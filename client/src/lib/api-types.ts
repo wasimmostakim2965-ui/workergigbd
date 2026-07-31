@@ -96,6 +96,28 @@ export const appRouter = t.router({
 
   admin: t.router({
     users: t.procedure.query(() => ({ users: [] as User[], error: null })),
+    jobs: t.procedure.query(() => ({ jobs: [] })),
+    withdrawals: t.procedure.query(() => ({ withdrawals: [] })),
+    deposits: t.procedure.query(() => ({ deposits: [] })),
+    supportMessages: t.procedure.query(() => ({ messages: [] })),
+    updateWithdrawal: t.procedure
+      .input(z.object({ id: z.string(), status: z.string() }))
+      .mutation(() => ({ success: false })),
+    updateDeposit: t.procedure
+      .input(z.object({ id: z.string(), status: z.string() }))
+      .mutation(() => ({ success: false })),
+    respondToSupport: t.procedure
+      .input(z.object({ id: z.string(), response: z.string() }))
+      .mutation(() => ({ success: false })),
+    createNotification: t.procedure
+      .input(z.object({ userId: z.string(), message: z.string() }))
+      .mutation(() => ({ success: false })),
+    searchUsers: t.procedure
+      .input(z.object({ query: z.string() }))
+      .mutation(() => ({ users: [] as User[] })),
+    getUserDetails: t.procedure
+      .input(z.object({ id: z.string() }))
+      .mutation(() => ({ user: null as User | null })),
     stats: t.procedure.query(() => ({
       totalUsers: 0,
       openJobs: 0,
