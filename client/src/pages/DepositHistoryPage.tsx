@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 
 export default function DepositHistoryPage() {
-  const { data: deposits, isLoading } = trpc.earnings.list.useQuery();
+  const { data: deposits, isLoading } = trpc.earnings.userDeposits.useQuery();
   
   const formatCurrency = (amount: string | number) => {
     return `৳${Number(amount).toLocaleString('en-BD', { minimumFractionDigits: 0 })}`;

@@ -204,6 +204,7 @@ export const appRouter = router({
     completeJob: protectedProcedure.input(z.object({ jobId: z.number() })).mutation(async ({ input, ctx }) => {
       const job = await db.getJobById(input.jobId);
       if (!job) throw new Error("Job not found");
+      
       await db.addEarningRecord({
         userId: ctx.user.id,
         jobId: input.jobId,
@@ -211,6 +212,15 @@ export const appRouter = router({
         status: "completed",
       });
       await db.addEarning(ctx.user.id, Number(job.pay));
+      
+      // Send notification to user about job completion
+      await db.createNotification({
+        userId: ctx.user.id,
+        title: "🎉 Job Completed - Payment Earned!",
+        message: `Congratulations! You earned ৳${job.pay} for completing "${job.title}".`,
+        type: "earning",
+      });
+      
       return { success: true };
     }),
 
@@ -225,12 +235,23 @@ export const appRouter = router({
           message: "Please verify your email before requesting a withdrawal",
         });
       }
+      
+      const amount = Number(input.amount);
       await db.createWithdrawalRequest({
         userId: ctx.user.id,
-        amount: String(input.amount),
+        amount: String(amount),
         paymentMethod: input.paymentMethod,
         paymentNumber: input.paymentNumber,
       });
+      
+      // Send notification to user about withdrawal request
+      await db.createNotification({
+        userId: ctx.user.id,
+        title: "💰 Withdrawal Request Submitted",
+        message: `Your withdrawal request of ৳${amount.toLocaleString()} via ${input.paymentMethod} has been submitted and is pending admin approval.`,
+        type: "payment",
+      });
+      
       return { success: true };
     }),
 
@@ -263,7 +284,20 @@ export const appRouter = router({
         transactionId: input.transactionId,
       });
       
+      // Send notification to user about deposit request
+      await db.createNotification({
+        userId: ctx.user.id,
+        title: "💳 Deposit Request Submitted",
+        message: `Your deposit request of ৳${amount.toLocaleString()} via ${input.paymentMethod} (TXN: ${input.transactionId}) has been submitted and is pending admin approval.`,
+        type: "payment",
+      });
+      
       return { success: true };
+    }),
+
+    // User's deposit history
+    userDeposits: protectedProcedure.query(async ({ ctx }) => {
+      return db.getUserDepositList(ctx.user.id);
     }),
   }),
 

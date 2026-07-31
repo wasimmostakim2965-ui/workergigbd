@@ -130,6 +130,9 @@ export type AppRouter = {
     userWithdrawals: {
       query: () => Promise<any[]>;
     };
+    userDeposits: {
+      query: () => Promise<any[]>;
+    };
     requestDeposit: {
       input: { amount: number | string; paymentMethod: string; paymentNumber: string; transactionId: string };
       mutation: (input: any) => Promise<{ success: boolean }>;

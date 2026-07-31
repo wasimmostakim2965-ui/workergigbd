@@ -41,6 +41,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { trpc } from "@/lib/trpc";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -85,6 +86,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [location, setLocation] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, logout } = useAuth();
+  
+  // Fetch real balance data
+  const { data: balanceData } = trpc.earnings.balance.useQuery();
+  const { data: unreadData } = trpc.notifications.unreadCount.useQuery();
 
   const handleLogout = () => {
     logout();
@@ -94,6 +99,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const userId = user?.id?.toString() || "0000000";
   const userName = user?.name || "User";
   const userEmail = user?.email || "";
+  
+  // Format balance for display
+  const formatBalance = (value: string | undefined | null) => {
+    const num = Number(value || 0);
+    return `$${num.toFixed(3)}`;
+  };
 
   return (
     <div className="min-h-screen bg-[#f8fafc] flex flex-col">
@@ -256,7 +267,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               className="p-2 rounded-full hover:bg-white/15 transition-colors relative"
             >
               <Bell className="h-5 w-5 text-white" />
-              <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-emerald-400 rounded-full border border-white" />
+              {(unreadData?.count ?? 0) > 0 && (
+                <span className="absolute -top-1 -right-1 h-5 w-5 bg-red-500 rounded-full border-2 border-white text-[10px] font-bold flex items-center justify-center">
+                  {unreadData!.count > 99 ? '99+' : unreadData!.count}
+                </span>
+              )}
             </button>
             
             {/* Profile Dropdown */}
@@ -306,11 +321,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="flex gap-2 px-4 pb-3">
           <div className="flex-1 bg-emerald-500 rounded-lg px-3 py-1.5 text-center">
             <p className="text-[10px] text-emerald-100 font-medium">Earning</p>
-            <p className="text-sm font-bold text-white">$0.000</p>
+            <p className="text-sm font-bold text-white">{formatBalance(balanceData?.earning)}</p>
           </div>
           <div className="flex-1 bg-emerald-500 rounded-lg px-3 py-1.5 text-center">
             <p className="text-[10px] text-emerald-100 font-medium">Deposit</p>
-            <p className="text-sm font-bold text-white">$0.000</p>
+            <p className="text-sm font-bold text-white">{formatBalance(balanceData?.deposit)}</p>
           </div>
         </div>
       </header>
