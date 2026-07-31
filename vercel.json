@@ -1,6 +1,6 @@
 {
   "buildCommand": "pnpm install --no-frozen-lockfile && pnpm run build",
-  "outputDirectory": "dist/public",
+  "outputDirectory": "dist",
   "installCommand": "pnpm install --no-frozen-lockfile --ignore-scripts",
   "framework": null,
   "rewrites": [
