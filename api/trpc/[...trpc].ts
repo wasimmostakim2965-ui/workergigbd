@@ -218,10 +218,11 @@ export const appRouter = router({
         if (isNaN(amount) || amount <= 0) {
           return { success: false, error: "Invalid amount" };
         }
+        // Insert with proper decimal format
         await query(
-          `INSERT INTO deposits ("userId", amount, "paymentMethod", "paymentNumber", "transactionId", status, "addedBy", "createdAt")
-           VALUES (1, $1, $2, $3, $4, 'pending', 1, NOW())`,
-          [amount, input.paymentMethod, input.paymentNumber, input.transactionId]
+          `INSERT INTO deposits ("userId", amount, "paymentMethod", "paymentNumber", "transactionId", status, "addedBy")
+           VALUES (1, '${amount}', $1, $2, $3, 'pending', 1)`,
+          [input.paymentMethod, input.paymentNumber, input.transactionId]
         );
         return { success: true };
       } catch (error) {
