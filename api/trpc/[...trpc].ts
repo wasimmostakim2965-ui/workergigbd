@@ -245,18 +245,34 @@ export const appRouter = router({
   earnings: router({
     balance: publicProcedure.query(async () => {
       try {
-        const [earnings, deposits, withdrawals] = await Promise.all([
+        const [earnings, deposits, withdrawals, pendingDeposits, pendingWithdrawals, completedJobs, rejectedWithdrawals] = await Promise.all([
           query(`SELECT COALESCE(SUM(CAST(amount AS NUMERIC)), 0) as total FROM earnings`),
           query(`SELECT COALESCE(SUM(CAST(amount AS NUMERIC)), 0) as total FROM deposits WHERE status = 'approved'`),
           query(`SELECT COALESCE(SUM(CAST(amount AS NUMERIC)), 0) as total FROM "withdrawalRequests" WHERE status IN ('approved', 'processed')`),
+          query(`SELECT COALESCE(SUM(CAST(amount AS NUMERIC)), 0) as total FROM deposits WHERE status = 'pending'`),
+          query(`SELECT COALESCE(SUM(CAST(amount AS NUMERIC)), 0) as total FROM "withdrawalRequests" WHERE status = 'pending'`),
+          query(`SELECT COUNT(*) as count FROM earnings WHERE status = 'completed'`),
+          query(`SELECT COUNT(*) as count FROM "withdrawalRequests" WHERE status = 'rejected'`),
         ]);
         return {
           earning: earnings[0]?.total || "0",
           deposit: deposits[0]?.total || "0",
-          totalWithdrawn: withdrawals[0]?.total || "0"
+          totalWithdrawn: withdrawals[0]?.total || "0",
+          pendingDeposits: pendingDeposits[0]?.total || "0",
+          pendingWithdrawals: pendingWithdrawals[0]?.total || "0",
+          completedJobs: parseInt(completedJobs[0]?.count || "0"),
+          rejectedWithdrawals: parseInt(rejectedWithdrawals[0]?.count || "0"),
         };
       } catch {
-        return { earning: "0", deposit: "0", totalWithdrawn: "0" };
+        return { 
+          earning: "0", 
+          deposit: "0", 
+          totalWithdrawn: "0",
+          pendingDeposits: "0",
+          pendingWithdrawals: "0",
+          completedJobs: 0,
+          rejectedWithdrawals: 0,
+        };
       }
     }),
     list: publicProcedure.query(async () => {
@@ -403,31 +419,51 @@ export const appRouter = router({
     }),
     stats: publicProcedure.query(async () => {
       try {
-        const [users, jobs, withdrawals, totalDeposits, totalWithdrawn] = await Promise.all([
+        const [
+          users, jobs, withdrawals, totalDeposits, totalWithdrawn,
+          earnings, todayWithdrawals, todayDeposits, todayWithdrawalAmount
+        ] = await Promise.all([
           query(`SELECT COUNT(*) as count FROM users`),
           query(`SELECT COUNT(*) as count FROM jobs WHERE status = 'active'`),
           query(`SELECT COUNT(*) as count FROM "withdrawalRequests" WHERE status = 'pending'`),
-          query(`SELECT COALESCE(SUM(amount), 0) as total FROM deposits WHERE status = 'approved'`),
-          query(`SELECT COALESCE(SUM(amount), 0) as total FROM "withdrawalRequests" WHERE status = 'approved'`),
+          query(`SELECT COALESCE(SUM(CAST(amount AS NUMERIC)), 0) as total FROM deposits WHERE status = 'approved'`),
+          query(`SELECT COALESCE(SUM(CAST(amount AS NUMERIC)), 0) as total FROM "withdrawalRequests" WHERE status IN ('approved', 'processed')`),
+          query(`SELECT COALESCE(SUM(CAST(amount AS NUMERIC)), 0) as total FROM earnings WHERE status = 'completed'`),
+          query(`SELECT COUNT(*) as count FROM "withdrawalRequests" WHERE DATE("createdAt") = CURRENT_DATE`),
+          query(`SELECT COUNT(*) as count FROM deposits WHERE DATE("createdAt") = CURRENT_DATE`),
+          query(`SELECT COALESCE(SUM(CAST(amount AS NUMERIC)), 0) as total FROM "withdrawalRequests" WHERE DATE("createdAt") = CURRENT_DATE AND status IN ('approved', 'processed')`),
         ]);
         return {
           totalUsers: parseInt(users[0]?.count || "0"),
           activeUsers: parseInt(users[0]?.count || "0"),
+          bannedUsers: 0,
+          suspendedUsers: 0,
           totalJobs: parseInt(jobs[0]?.count || "0"),
           activeJobs: parseInt(jobs[0]?.count || "0"),
           pendingWithdrawals: parseInt(withdrawals[0]?.count || "0"),
           totalWithdrawn: parseFloat(totalWithdrawn[0]?.total || "0"),
           totalDeposits: parseFloat(totalDeposits[0]?.total || "0"),
+          totalEarnings: parseFloat(earnings[0]?.total || "0"),
+          todayWithdrawals: parseInt(todayWithdrawals[0]?.count || "0"),
+          todayWithdrawalAmount: parseFloat(todayWithdrawalAmount[0]?.total || "0"),
+          todayDeposits: parseInt(todayDeposits[0]?.count || "0"),
         };
-      } catch {
+      } catch (error) {
+        console.error("[API] Stats error:", error);
         return {
           totalUsers: 0,
           activeUsers: 0,
+          bannedUsers: 0,
+          suspendedUsers: 0,
           totalJobs: 0,
           activeJobs: 0,
           pendingWithdrawals: 0,
           totalWithdrawn: 0,
           totalDeposits: 0,
+          totalEarnings: 0,
+          todayWithdrawals: 0,
+          todayWithdrawalAmount: 0,
+          todayDeposits: 0,
         };
       }
     }),
