@@ -8,28 +8,18 @@ const t = initTRPC.create();
 
 // ─── Shared Types ───
 export interface User {
-  id: string;
-  email: string;
-  name: string;
+  id: number;
+  openId: string;
+  name: string | null;
+  email: string | null;
   role: string;
   status: string;
-  balance: number;
-}
-
-export interface Job {
-  id: string;
-  title: string;
-  description: string;
-  reward: number;
-  category: string;
-  status: string;
-  created_by_id: string;
-  created_at: string;
+  emailVerified?: number;
 }
 
 // ─── API Router Type ───
 export const appRouter = t.router({
-  // Public endpoints
+  // Health
   health: t.procedure.query(() => ({
     status: "ok",
     timestamp: new Date().toISOString(),
@@ -37,108 +27,77 @@ export const appRouter = t.router({
     message: "WorkerGigBD API is running!",
   })),
 
-  welcome: t.procedure.query(() => ({
-    app: "WorkerGigBD",
-    tagline: "Bangladesh's #1 Micro-Task Freelancing Platform",
-  })),
-
   stats: t.router({
-    public: t.procedure.query(() => ({
-      totalUsers: 0,
-      openJobs: 0,
-      totalEarnings: 0,
-    })),
+    public: t.procedure.query(() => ({ totalUsers: 0, totalJobs: 0 })),
   }),
 
   jobs: t.router({
-    list: t.procedure
-      .input(z.object({ limit: z.number().optional(), offset: z.number().optional() }).optional())
-      .query(() => ({ jobs: [] as Job[], total: 0 })),
-    getAll: t.procedure.query(() => ({ jobs: [] as Job[], total: 0 })),
-    create: t.procedure
-      .input(z.object({ title: z.string(), description: z.string(), reward: z.number(), category: z.string() }))
-      .mutation(() => ({ success: false, error: "" })),
-    update: t.procedure
-      .input(z.object({ id: z.string(), title: z.string().optional(), description: z.string().optional(), reward: z.number().optional(), status: z.string().optional() }))
-      .mutation(() => ({ success: false })),
-    delete: t.procedure
-      .input(z.object({ id: z.string() }))
-      .mutation(() => ({ success: false })),
+    list: t.procedure.query(() => [] as any[]),
+    getById: t.procedure.input(z.object({ id: z.number() })).query(() => null),
+    categories: t.procedure.query(() => [] as string[]),
+    create: t.procedure.input(z.object({
+      title: z.string(), description: z.string().optional(), category: z.string(),
+      pay: z.union([z.number(), z.string()]),
+      status: z.enum(["active", "inactive", "completed", "paused"]).optional(),
+    })).mutation(() => ({ success: false, error: "" })),
+    update: t.procedure.input(z.object({
+      id: z.number(), title: z.string().optional(), description: z.string().optional(),
+      category: z.string().optional(), pay: z.union([z.number(), z.string()]).optional(),
+      status: z.enum(["active", "inactive", "completed", "paused"]).optional(),
+    })).mutation(() => ({ success: false })),
+    delete: t.procedure.input(z.object({ id: z.number() })).mutation(() => ({ success: false })),
   }),
 
   auth: t.router({
-    me: t.procedure.query(() => ({ user: null as User | null })),
-    login: t.procedure
-      .input(z.object({ email: z.string(), password: z.string() }))
-      .mutation(() => ({ user: null as User | null, error: "", session: null })),
-    register: t.procedure
-      .input(z.object({ email: z.string(), password: z.string(), name: z.string() }))
-      .mutation(() => ({ user: null as User | null, error: "" })),
-    verifyEmail: t.procedure
-      .input(z.object({ token: z.string() }))
-      .mutation(() => ({ success: false })),
+    me: t.procedure.query(() => null as User | null),
+    logout: t.procedure.mutation(() => ({ success: true, clearCookie: true })),
+    register: t.procedure.input(z.object({ name: z.string(), email: z.string(), password: z.string() })).mutation(() => ({ success: false, error: "" })),
+    login: t.procedure.input(z.object({ email: z.string(), password: z.string() })).mutation(() => ({ success: false, error: "" })),
+    verifyEmail: t.procedure.input(z.object({ token: z.string() })).mutation(() => ({ success: true })),
+    resendVerification: t.procedure.mutation(() => ({ success: true })),
   }),
 
   admin: t.router({
-    users: t.procedure.query(() => ({ users: [] as User[], error: null as string | null })),
+    users: t.procedure.query(() => [] as any[]),
+    searchUsers: t.procedure.input(z.object({ query: z.string() })).mutation(() => [] as any[]),
+    getUserDetails: t.procedure.input(z.object({ userId: z.number() })).mutation(() => ({ user: null as any })),
+    updateUserStatus: t.procedure.input(z.object({ userId: z.number(), status: z.enum(["active", "banned", "suspended"]), banReason: z.string().optional() })).mutation(() => ({ success: false })),
+    addUserFunds: t.procedure.input(z.object({ userId: z.number(), amount: z.number(), paymentMethod: z.string(), transactionId: z.string().optional(), note: z.string().optional() })).mutation(() => ({ success: false })),
+    updateRole: t.procedure.input(z.object({ userId: z.number(), role: z.enum(["user", "admin"]) })).mutation(() => ({ success: false })),
+    updateUser: t.procedure.input(z.object({ userId: z.number(), name: z.string().optional(), email: z.string().optional(), phone: z.string().optional() })).mutation(() => ({ success: false })),
+    withdrawals: t.procedure.query(() => [] as any[]),
+    updateWithdrawal: t.procedure.input(z.object({ id: z.number(), status: z.enum(["pending", "approved", "rejected", "processed"]), adminNote: z.string().optional() })).mutation(() => ({ success: false })),
+    deposits: t.procedure.query(() => [] as any[]),
+    updateDeposit: t.procedure.input(z.object({ id: z.number(), status: z.enum(["pending", "approved", "rejected"]), adminNote: z.string().optional() })).mutation(() => ({ success: false })),
+    createNotification: t.procedure.input(z.object({ userId: z.number(), title: z.string(), message: z.string().optional(), type: z.enum(["info", "earning", "system", "payment"]).optional() })).mutation(() => ({ success: false })),
+    logs: t.procedure.query(() => [] as any[]),
     stats: t.procedure.query(() => ({ totalUsers: 0, openJobs: 0, totalEarnings: 0, pendingWithdrawals: 0, pendingDeposits: 0 })),
-    jobs: t.procedure.query(() => ({ jobs: [] as Job[] })),
-    withdrawals: t.procedure.query(() => ({ withdrawals: [] })),
-    deposits: t.procedure.query(() => ({ deposits: [] })),
-    supportMessages: t.procedure.query(() => ({ messages: [] })),
-    logs: t.procedure.query(() => ({ logs: [] })),
-    updateWithdrawal: t.procedure
-      .input(z.object({ id: z.string(), status: z.string() }))
-      .mutation(() => ({ success: false })),
-    updateDeposit: t.procedure
-      .input(z.object({ id: z.string(), status: z.string() }))
-      .mutation(() => ({ success: false })),
-    respondToSupport: t.procedure
-      .input(z.object({ id: z.string(), response: z.string() }))
-      .mutation(() => ({ success: false })),
-    createNotification: t.procedure
-      .input(z.object({ userId: z.string(), message: z.string() }))
-      .mutation(() => ({ success: false })),
-    searchUsers: t.procedure
-      .input(z.object({ query: z.string() }))
-      .mutation(() => ({ users: [] as User[] })),
-    getUserDetails: t.procedure
-      .input(z.object({ id: z.string() }))
-      .mutation(() => ({ user: null as User | null })),
-    updateUserStatus: t.procedure
-      .input(z.object({ id: z.string(), status: z.string() }))
-      .mutation(() => ({ success: false })),
-    addUserFunds: t.procedure
-      .input(z.object({ id: z.string(), amount: z.number() }))
-      .mutation(() => ({ success: false })),
-    updateUser: t.procedure
-      .input(z.object({ id: z.string(), name: z.string().optional(), email: z.string().optional(), role: z.string().optional() }))
-      .mutation(() => ({ success: false })),
+    supportMessages: t.procedure.query(() => [] as any[]),
+    respondToSupport: t.procedure.input(z.object({ id: z.number(), response: z.string(), status: z.enum(["pending", "responded", "resolved"]).optional() })).mutation(() => ({ success: false })),
   }),
 
   earnings: t.router({
-    balance: t.procedure.query(() => ({ balance: 0 })),
-    list: t.procedure.query(() => ({ earnings: [] })),
-    userWithdrawals: t.procedure.query(() => ({ withdrawals: [] })),
-    withdraw: t.procedure
-      .input(z.object({ amount: z.number(), method: z.string(), number: z.string() }))
-      .mutation(() => ({ success: false, error: "" })),
+    list: t.procedure.query(() => [] as any[]),
+    balance: t.procedure.query(() => ({ earning: "0.000", deposit: "0.000", totalWithdrawn: "0.000" })),
+    completeJob: t.procedure.input(z.object({ jobId: z.number() })).mutation(() => ({ success: false })),
+    withdraw: t.procedure.input(z.object({ amount: z.union([z.number(), z.string()]), paymentMethod: z.string(), paymentNumber: z.string() })).mutation(() => ({ success: false, message: "" })),
+    userWithdrawals: t.procedure.query(() => [] as any[]),
+    requestDeposit: t.procedure.input(z.object({ amount: z.union([z.number(), z.string()]), paymentMethod: z.string(), paymentNumber: z.string(), transactionId: z.string() })).mutation(() => ({ success: false, message: "" })),
   }),
 
   support: t.router({
-    create: t.procedure
-      .input(z.object({ message: z.string() }))
-      .mutation(() => ({ success: false, error: "" })),
+    create: t.procedure.input(z.object({ subject: z.string().optional(), message: z.string() })).mutation(() => ({ success: false })),
+    list: t.procedure.query(() => [] as any[]),
   }),
 
-  requestDeposit: t.procedure
-    .input(z.object({ amount: z.number(), method: z.string(), number: z.string() }))
-    .mutation(() => ({ success: false, error: "" })),
+  notifications: t.router({
+    list: t.procedure.query(() => [] as any[]),
+    unreadCount: t.procedure.query(() => ({ count: 0 })),
+    markRead: t.procedure.input(z.object({ id: z.number() })).mutation(() => ({ success: false })),
+  }),
 
   ai: t.router({
-    chat: t.procedure
-      .input(z.object({ messages: z.array(z.object({ role: z.string(), content: z.string() })) }))
-      .mutation(() => ({ choices: [{ message: { content: "" } }] })),
+    chat: t.procedure.input(z.object({ messages: z.array(z.object({ role: z.string(), content: z.string() })) })).mutation(() => ({ choices: [{ message: { content: "" } }] })),
   }),
 });
 
