@@ -95,8 +95,8 @@ async function query(sql: string, params?: any[]) {
       client.release();
     }
   } catch (error) {
-    console.error("[API] Database query error:", error);
-    return [];
+    console.error("[API] Database query error:", sql.substring(0, 100), error);
+    throw error; // Re-throw to let calling code handle it
   }
 }
 
@@ -296,21 +296,21 @@ export const appRouter = router({
         // Hash password
         const passwordHash = await bcrypt.hash(input.password, 10);
         
-        // Create user - use simple INSERT without RETURNING first
-        await query(
+        // Create user - use RETURNING clause
+        const result = await query(
           `INSERT INTO users (name, email, passwordHash, role, status, "createdAt", "updatedAt") 
-           VALUES ($1, $2, $3, 'user', 'active', NOW(), NOW())`,
+           VALUES ($1, $2, $3, 'user', 'active', NOW(), NOW())
+           RETURNING id, name, email, role`,
           [input.name, email, passwordHash]
         );
         
-        // Get the newly created user
-        const newUsers = await query(`SELECT id, name, email, role FROM users WHERE email = $1`, [email]);
+        console.log("[Register] Result:", JSON.stringify(result));
         
-        if (!newUsers || newUsers.length === 0) {
-          return { success: false, error: "User created but failed to retrieve" };
+        if (!result || result.length === 0) {
+          return { success: false, error: "Failed to create user - no result" };
         }
         
-        const user = newUsers[0];
+        const user = result[0];
         console.log("[Register] Created user:", user.id, user.email);
         
         return { 
