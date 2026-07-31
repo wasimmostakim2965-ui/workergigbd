@@ -218,16 +218,16 @@ export const appRouter = router({
         if (isNaN(amount) || amount <= 0) {
           return { success: false, error: "Invalid amount" };
         }
-        // Insert with proper decimal format
-        await query(
-          `INSERT INTO deposits ("userId", amount, "paymentMethod", "paymentNumber", "transactionId", status, "addedBy")
-           VALUES (1, '${amount}', $1, $2, $3, 'pending', 1)`,
-          [input.paymentMethod, input.paymentNumber, input.transactionId]
-        );
-        return { success: true };
-      } catch (error) {
+        // Debug: Check if INSERT works
+        const sql = `INSERT INTO deposits ("userId", amount, "paymentMethod", "paymentNumber", "transactionId", status, "addedBy")
+                     VALUES (1, '${amount}', '${input.paymentMethod}', '${input.paymentNumber}', '${input.transactionId}', 'pending', 1) RETURNING id`;
+        console.log("[API] Deposit SQL:", sql);
+        const result = await query(sql);
+        console.log("[API] Deposit result:", result);
+        return { success: true, inserted: result };
+      } catch (error: any) {
         console.error("[API] Deposit error:", error);
-        return { success: false, error: "Failed to submit deposit request" };
+        return { success: false, error: error.message || "Failed to submit deposit request" };
       }
     }),
     completeJob: publicProcedure.input(z.object({ jobId: z.number() })).mutation(async ({ input }) => {
