@@ -624,11 +624,15 @@ export const appRouter = router({
 
   // Notifications
   notifications: router({
-    list: publicProcedure.query(async () => {
-      return await query(`SELECT * FROM notifications ORDER BY "createdAt" DESC LIMIT 50`);
+    list: publicProcedure.query(async ({ ctx }) => {
+      const userId = (ctx as any).session?.userId;
+      if (!userId) return [];
+      return await query(`SELECT * FROM notifications WHERE "userId" = $1 ORDER BY "createdAt" DESC LIMIT 50`, [userId]);
     }),
-    unreadCount: publicProcedure.query(async () => {
-      const result = await query(`SELECT COUNT(*) as count FROM notifications WHERE read = false`);
+    unreadCount: publicProcedure.query(async ({ ctx }) => {
+      const userId = (ctx as any).session?.userId;
+      if (!userId) return { count: 0 };
+      const result = await query(`SELECT COUNT(*) as count FROM notifications WHERE "userId" = $1 AND read = false`, [userId]);
       return { count: parseInt(result[0]?.count || "0") };
     }),
     markRead: publicProcedure.input(z.object({ id: z.number() })).mutation(async ({ input }) => {
