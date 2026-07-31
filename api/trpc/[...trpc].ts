@@ -210,7 +210,12 @@ export const appRouter = router({
       paymentMethod: z.string(),
       paymentNumber: z.string(),
       transactionId: z.string(),
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ ctx, input }) => {
+      const userId = (ctx as any).session?.userId;
+      if (!userId) {
+        return { success: false, error: "Authentication required" };
+      }
+      
       try {
         const amount = typeof input.amount === 'string' ? parseFloat(input.amount) : input.amount;
         if (isNaN(amount) || amount <= 0) {
@@ -218,7 +223,8 @@ export const appRouter = router({
         }
         await query(
           `INSERT INTO deposits ("userId", amount, "paymentMethod", "transactionId", status, "addedBy")
-           VALUES (1, '${amount}', '${input.paymentMethod}', '${input.transactionId}', 'pending', 1)`
+           VALUES ($1, $2, $3, $4, 'pending', $1)`,
+          [userId, amount, input.paymentMethod, input.transactionId]
         );
         return { success: true };
       } catch (error: any) {
@@ -632,11 +638,39 @@ export const appRouter = router({
       status: z.enum(["pending", "approved", "rejected"]),
     })).mutation(async ({ input }) => {
       try {
+        // Get withdrawal request details first
+        const withdrawals = await query(`SELECT * FROM "withdrawalRequests" WHERE id = $1`, [input.id]);
+        const withdrawal = withdrawals[0];
+        
+        if (!withdrawal) {
+          return { success: false, error: "Withdrawal request not found" };
+        }
+        
+        // Update withdrawal status
         await query(`UPDATE "withdrawalRequests" SET status = $1 WHERE id = $2`, [input.status, input.id]);
+        
+        // If approved, deduct from user's earning balance
+        if (input.status === "approved") {
+          const amount = parseFloat(withdrawal.amount);
+          const userId = withdrawal.userId;
+          
+          // Deduct from user's earning balance
+          await query(`
+            INSERT INTO "userBalances" ("userId", earning, "updatedAt")
+            VALUES ($1, $2, NOW())
+            ON CONFLICT ("userId") 
+            DO UPDATE SET 
+              earning = GREATEST(0, "userBalances".earning + $2),
+              "updatedAt" = NOW()
+          `, [userId, -amount]);
+          
+          console.log(`[Withdrawal] Deducted ${amount} from user ${userId} balance`);
+        }
+        
         return { success: true };
-      } catch (error) {
+      } catch (error: any) {
         console.error("[API] Update withdrawal error:", error);
-        return { success: false };
+        return { success: false, error: error.message };
       }
     }),
     updateDeposit: publicProcedure.input(z.object({
