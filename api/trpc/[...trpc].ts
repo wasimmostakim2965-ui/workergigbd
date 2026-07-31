@@ -328,7 +328,8 @@ export const appRouter = router({
     debugInsert: publicProcedure.mutation(async () => {
       try {
         await query(`INSERT INTO deposits ("userId", amount, "paymentMethod", "paymentNumber", "transactionId", status, "addedBy") VALUES (1, '999.00', 'test', '000', 'TEST123', 'pending', 1)`);
-        return { success: true };
+        const count = await query(`SELECT COUNT(*) as cnt FROM deposits`);
+        return { success: true, count: count[0]?.cnt };
       } catch (error: any) {
         return { error: error.message };
       }
