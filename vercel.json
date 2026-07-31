@@ -3,6 +3,16 @@
   "outputDirectory": "dist/public",
   "installCommand": "pnpm install --no-frozen-lockfile --ignore-scripts",
   "framework": null,
+  "routes": [
+    {
+      "src": "^/api/.*$",
+      "dest": "/api/$0"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ],
   "headers": [
     {
       "source": "/assets/(.*)",
