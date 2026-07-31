@@ -327,9 +327,8 @@ export const appRouter = router({
     }),
     debugInsert: publicProcedure.mutation(async () => {
       try {
-        const p = await getPool();
-        if (!p) return { error: "No pool", success: false };
-        const client = await p.connect();
+        if (!pool) return { error: "No pool", success: false };
+        const client = await pool.connect();
         try {
           await client.query(`INSERT INTO deposits ("userId", amount, "paymentMethod", "paymentNumber", "transactionId", status, "addedBy") VALUES (1, '999.00', 'test', '000', 'TEST123', 'pending', 1)`);
           const result = await client.query(`SELECT COUNT(*) as cnt FROM deposits`);
