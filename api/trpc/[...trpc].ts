@@ -4,13 +4,70 @@ import superjson from "superjson";
 import { z } from "zod";
 import { Pool } from "pg";
 import bcrypt from "bcryptjs";
+import * as jose from "jose";
+
+// ─── Cookie Constants ───
+const COOKIE_SECRET = process.env.COOKIE_SECRET || "365398eaac891ae4129b876d9d2fa4cf524403cad414fe67d336042f92fa221e";
+const SESSION_COOKIE_NAME = "app_session_id";
+
+// ─── Session Verification ───
+async function verifySession(cookieValue: string | undefined | null): Promise<{ openId: string; userId?: number } | null> {
+  if (!cookieValue) return null;
+  try {
+    const secretKey = new TextEncoder().encode(COOKIE_SECRET);
+    const { payload } = await jose.jwtVerify(cookieValue, secretKey, { algorithms: ["HS256"] });
+    const { openId } = payload as Record<string, unknown>;
+    if (!openId || typeof openId !== "string") return null;
+    
+    // Get userId from database
+    const users = await query(`SELECT id FROM users WHERE "openId" = $1 LIMIT 1`, [openId]);
+    if (users.length === 0) return null;
+    
+    return { openId, userId: users[0].id };
+  } catch {
+    return null;
+  }
+}
+
+// ─── Get session from request ───
+async function getSessionFromRequest(req: Request): Promise<{ openId: string; userId: number } | null> {
+  const cookieHeader = req.headers.get("cookie");
+  if (!cookieHeader) return null;
+  
+  // Parse cookies
+  const cookies: Record<string, string> = {};
+  cookieHeader.split(";").forEach(cookie => {
+    const [key, ...valueParts] = cookie.trim().split("=");
+    if (key) {
+      cookies[key.trim()] = valueParts.join("=").trim();
+    }
+  });
+  
+  const sessionCookie = cookies[SESSION_COOKIE_NAME];
+  if (!sessionCookie) return null;
+  
+  return verifySession(sessionCookie);
+}
 
 // ─── tRPC Setup ───
 const t = initTRPC.create({
   transformer: superjson,
 });
+
 const router = t.router;
 const publicProcedure = t.procedure;
+
+// Create context type
+type Context = {
+  session: { openId: string; userId: number } | null;
+};
+
+const createTRPCContext = async (opts: { req: Request }) => {
+  const session = await getSessionFromRequest(opts.req);
+  return { session };
+};
+
+export type { Context, Context as TrpcContext };
 
 // ─── Database Configuration ───
 const databaseUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
@@ -190,7 +247,25 @@ export const appRouter = router({
   }),
 
   auth: router({
-    me: publicProcedure.query(async () => null),
+    me: publicProcedure.query(async ({ ctx }) => {
+      const userId = (ctx as any).session?.userId;
+      if (!userId) return null;
+      
+      const users = await query(`SELECT id, "openId", name, email, role, status, phone, "emailVerified" FROM users WHERE id = $1`, [userId]);
+      if (users.length === 0) return null;
+      
+      const user = users[0];
+      return {
+        id: user.id,
+        openId: user.openId,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        phone: user.phone,
+        emailVerified: user.emailVerified,
+      };
+    }),
     logout: publicProcedure.mutation(() => ({ success: true })),
     verifyEmail: publicProcedure.input(z.object({ token: z.string() })).mutation(async ({ input }) => {
       return { success: true };
@@ -243,8 +318,31 @@ export const appRouter = router({
 
   // Earnings
   earnings: router({
-    balance: publicProcedure.query(async () => {
+    balance: publicProcedure.query(async ({ ctx }) => {
       try {
+        const userId = (ctx as any).session?.userId;
+        
+        // If user is authenticated, return user-specific balance
+        if (userId) {
+          const [userBalance, pendingDeposits, pendingWithdrawals] = await Promise.all([
+            query(`SELECT earning, deposit, "totalWithdrawn" FROM "userBalances" WHERE "userId" = $1`, [userId]),
+            query(`SELECT COALESCE(SUM(CAST(amount AS NUMERIC)), 0) as total FROM deposits WHERE "userId" = $1 AND status = 'pending'`, [userId]),
+            query(`SELECT COALESCE(SUM(CAST(amount AS NUMERIC)), 0) as total FROM "withdrawalRequests" WHERE "userId" = $1 AND status = 'pending'`, [userId]),
+          ]);
+          
+          const balance = userBalance[0] || { earning: "0", deposit: "0", totalWithdrawn: "0" };
+          return {
+            earning: balance.earning?.toString() || "0",
+            deposit: balance.deposit?.toString() || "0",
+            totalWithdrawn: balance.totalWithdrawn?.toString() || "0",
+            pendingDeposits: pendingDeposits[0]?.total || "0",
+            pendingWithdrawals: pendingWithdrawals[0]?.total || "0",
+            completedJobs: 0,
+            rejectedWithdrawals: 0,
+          };
+        }
+        
+        // For unauthenticated requests, return global stats (public dashboard)
         const [earnings, deposits, withdrawals, pendingDeposits, pendingWithdrawals, completedJobs, rejectedWithdrawals] = await Promise.all([
           query(`SELECT COALESCE(SUM(CAST(amount AS NUMERIC)), 0) as total FROM earnings`),
           query(`SELECT COALESCE(SUM(CAST(amount AS NUMERIC)), 0) as total FROM deposits WHERE status = 'approved'`),
@@ -263,7 +361,8 @@ export const appRouter = router({
           completedJobs: parseInt(completedJobs[0]?.count || "0"),
           rejectedWithdrawals: parseInt(rejectedWithdrawals[0]?.count || "0"),
         };
-      } catch {
+      } catch (error) {
+        console.error("[API] Balance error:", error);
         return { 
           earning: "0", 
           deposit: "0", 
@@ -275,14 +374,22 @@ export const appRouter = router({
         };
       }
     }),
-    list: publicProcedure.query(async () => {
-      return await query(`SELECT * FROM earnings ORDER BY "createdAt" DESC LIMIT 50`);
+    list: publicProcedure.query(async ({ ctx }) => {
+      const userId = (ctx as any).session?.userId;
+      if (userId) {
+        return await query(`SELECT * FROM earnings WHERE "userId" = $1 ORDER BY "createdAt" DESC LIMIT 50`, [userId]);
+      }
+      return [];
     }),
     withdraw: publicProcedure.input(z.object({
       amount: z.union([z.number().positive(), z.string()]),
       paymentMethod: z.string(),
       paymentNumber: z.string(),
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ ctx, input }) => {
+      const userId = (ctx as any).session?.userId;
+      if (!userId) {
+        return { success: false, error: "Authentication required" };
+      }
       try {
         const amount = typeof input.amount === 'string' ? parseFloat(input.amount) : input.amount;
         if (isNaN(amount) || amount <= 0) {
@@ -290,8 +397,8 @@ export const appRouter = router({
         }
         await query(
           `INSERT INTO "withdrawalRequests" ("userId", amount, "paymentMethod", "paymentNumber", status, "createdAt")
-           VALUES (1, $1, $2, $3, 'pending', NOW())`,
-          [amount, input.paymentMethod, input.paymentNumber]
+           VALUES ($1, $2, $3, $4, 'pending', NOW())`,
+          [userId, amount, input.paymentMethod, input.paymentNumber]
         );
         return { success: true };
       } catch (error) {
@@ -299,15 +406,23 @@ export const appRouter = router({
         return { success: false, error: "Failed to submit withdrawal request" };
       }
     }),
-    userWithdrawals: publicProcedure.query(async () => {
-      return await query(`SELECT * FROM "withdrawalRequests" ORDER BY "createdAt" DESC LIMIT 50`);
+    userWithdrawals: publicProcedure.query(async ({ ctx }) => {
+      const userId = (ctx as any).session?.userId;
+      if (userId) {
+        return await query(`SELECT * FROM "withdrawalRequests" WHERE "userId" = $1 ORDER BY "createdAt" DESC LIMIT 50`, [userId]);
+      }
+      return [];
     }),
     requestDeposit: publicProcedure.input(z.object({
       amount: z.union([z.number().positive(), z.string()]),
       paymentMethod: z.string(),
       paymentNumber: z.string(),
       transactionId: z.string(),
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ ctx, input }) => {
+      const userId = (ctx as any).session?.userId;
+      if (!userId) {
+        return { success: false, error: "Authentication required" };
+      }
       try {
         const amount = typeof input.amount === 'string' ? parseFloat(input.amount) : input.amount;
         if (isNaN(amount) || amount <= 0) {
@@ -315,7 +430,8 @@ export const appRouter = router({
         }
         await query(
           `INSERT INTO deposits ("userId", amount, "paymentMethod", "transactionId", status, "addedBy")
-           VALUES (1, '${amount}', '${input.paymentMethod}', '${input.transactionId}', 'pending', 1)`
+           VALUES ($1, $2, $3, $4, 'pending', $5)`,
+          [userId, amount, input.paymentMethod, input.transactionId, userId]
         );
         return { success: true };
       } catch (error: any) {
@@ -323,18 +439,62 @@ export const appRouter = router({
         return { success: false, error: error.message || "Failed to submit deposit request" };
       }
     }),
-    completeJob: publicProcedure.input(z.object({ jobId: z.number() })).mutation(async ({ input }) => {
+    completeJob: publicProcedure.input(z.object({ jobId: z.number() })).mutation(async ({ ctx, input }) => {
+      const userId = (ctx as any).session?.userId;
+      if (!userId) {
+        return { success: false, error: "Authentication required" };
+      }
       try {
         const jobs = await query(`SELECT * FROM jobs WHERE id = $1`, [input.jobId]);
-        if (!jobs[0]) return { success: false };
-        await query(
-          `INSERT INTO earnings (amount, status, "createdAt") VALUES ($1, 'completed', NOW())`,
-          [jobs[0].pay]
+        if (!jobs[0]) return { success: false, error: "Job not found" };
+        
+        const job = jobs[0];
+        
+        // Check if job is active and has slots
+        if (job.status !== 'active') {
+          return { success: false, error: "Job is not active" };
+        }
+        if (parseInt(job.slotsRemaining) <= 0) {
+          return { success: false, error: "No slots available" };
+        }
+        
+        // Check if user already completed this job
+        const existingEarning = await query(
+          `SELECT id FROM earnings WHERE "userId" = $1 AND "jobId" = $2`,
+          [userId, input.jobId]
         );
-        return { success: true, amount: jobs[0].pay };
+        if (existingEarning.length > 0) {
+          return { success: false, error: "You have already completed this job" };
+        }
+        
+        const amount = parseFloat(job.pay);
+        
+        // Insert earning record
+        await query(
+          `INSERT INTO earnings ("userId", "jobId", amount, status, "createdAt") VALUES ($1, $2, $3, 'completed', NOW())`,
+          [userId, input.jobId, amount]
+        );
+        
+        // Also add to user's earning balance
+        await query(`
+          INSERT INTO "userBalances" ("userId", earning, "updatedAt")
+          VALUES ($1, $2, NOW())
+          ON CONFLICT ("userId") 
+          DO UPDATE SET 
+            earning = "userBalances".earning + $2,
+            "updatedAt" = NOW()
+        `, [userId, amount]);
+        
+        // Decrement job slots and increment workers completed
+        await query(
+          `UPDATE jobs SET "slotsRemaining" = "slotsRemaining" - 1, "workersCompleted" = "workersCompleted" + 1 WHERE id = $1`,
+          [input.jobId]
+        );
+        
+        return { success: true, amount };
       } catch (error) {
         console.error("[API] Complete job error:", error);
-        return { success: false };
+        return { success: false, error: "Failed to complete job" };
       }
     }),
   }),
@@ -482,13 +642,44 @@ export const appRouter = router({
     updateDeposit: publicProcedure.input(z.object({
       id: z.number(),
       status: z.enum(["pending", "approved", "rejected"]),
+      adminNote: z.string().optional(),
     })).mutation(async ({ input }) => {
       try {
-        await query(`UPDATE deposits SET status = $1 WHERE id = $2`, [input.status, input.id]);
+        // First get the deposit info to get userId and amount
+        const deposits = await query(`SELECT * FROM deposits WHERE id = $1`, [input.id]);
+        const deposit = deposits[0];
+        
+        if (!deposit) {
+          return { success: false, error: "Deposit not found" };
+        }
+        
+        // Update deposit status
+        await query(
+          `UPDATE deposits SET status = $1, note = $2, "processedAt" = NOW() WHERE id = $3`,
+          [input.status, input.adminNote || null, input.id]
+        );
+        
+        // If approved, add to user balance
+        if (input.status === "approved") {
+          const amount = parseFloat(deposit.amount);
+          
+          // Insert or update user balance (deposit column)
+          await query(`
+            INSERT INTO "userBalances" ("userId", deposit, "updatedAt")
+            VALUES ($1, $2, NOW())
+            ON CONFLICT ("userId") 
+            DO UPDATE SET 
+              deposit = "userBalances".deposit + $2,
+              "updatedAt" = NOW()
+          `, [deposit.userId, amount]);
+          
+          console.log(`[Deposit] Added ${amount} to user ${deposit.userId} balance`);
+        }
+        
         return { success: true };
-      } catch (error) {
+      } catch (error: any) {
         console.error("[API] Update deposit error:", error);
-        return { success: false };
+        return { success: false, error: error.message };
       }
     }),
     updateUser: publicProcedure.input(z.object({
@@ -525,14 +716,31 @@ export const appRouter = router({
     })).mutation(async ({ input }) => {
       try {
         const amount = typeof input.amount === 'string' ? parseFloat(input.amount) : input.amount;
+        if (isNaN(amount) || amount <= 0) {
+          return { success: false, error: "Invalid amount" };
+        }
+        
+        // Insert deposit record
         await query(
           `INSERT INTO deposits ("userId", amount, "paymentMethod", "transactionId", status, "addedBy") VALUES ($1, $2, 'admin', 'admin-add', 'approved', 1)`,
           [input.userId, amount]
         );
+        
+        // Also add to user balance
+        await query(`
+          INSERT INTO "userBalances" ("userId", deposit, "updatedAt")
+          VALUES ($1, $2, NOW())
+          ON CONFLICT ("userId") 
+          DO UPDATE SET 
+            deposit = "userBalances".deposit + $2,
+            "updatedAt" = NOW()
+        `, [input.userId, amount]);
+        
+        console.log(`[Admin] Added ${amount} to user ${input.userId} balance`);
         return { success: true };
-      } catch (error) {
+      } catch (error: any) {
         console.error("[API] Add user funds error:", error);
-        return { success: false };
+        return { success: false, error: error.message };
       }
     }),
     searchUsers: publicProcedure.input(z.object({
@@ -646,7 +854,11 @@ const handler = (req: Request) =>
     endpoint: "/api/trpc",
     req,
     router: appRouter,
-    createContext: () => ({}),
+    createContext: async () => {
+      // Get user session from cookie
+      const session = await getSessionFromRequest(req);
+      return { session };
+    },
     onError: ({ error }) => console.error("tRPC Error:", error),
   });
 
