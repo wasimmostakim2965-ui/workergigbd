@@ -298,10 +298,10 @@ export const appRouter = router({
         
         // Create user - use RETURNING clause
         const result = await query(
-          `INSERT INTO users (name, email, "passwordHash", role, status, "createdAt", "updatedAt") 
-           VALUES ($1, $2, $3, 'user', 'active', NOW(), NOW())
+          `INSERT INTO users (name, email, "passwordHash", "openId", role, status, "createdAt", "updatedAt") 
+           VALUES ($1, $2, $3, $4, 'user', 'active', NOW(), NOW())
            RETURNING id, name, email, role`,
-          [input.name, email, passwordHash]
+          [input.name, email, passwordHash, `email_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`]
         );
         
         console.log("[Register] Result:", JSON.stringify(result));
