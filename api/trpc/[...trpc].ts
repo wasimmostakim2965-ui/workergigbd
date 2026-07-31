@@ -298,7 +298,7 @@ export const appRouter = router({
         
         // Create user - use RETURNING clause
         const result = await query(
-          `INSERT INTO users (name, email, passwordHash, role, status, "createdAt", "updatedAt") 
+          `INSERT INTO users (name, email, "passwordHash", role, status, "createdAt", "updatedAt") 
            VALUES ($1, $2, $3, 'user', 'active', NOW(), NOW())
            RETURNING id, name, email, role`,
           [input.name, email, passwordHash]
