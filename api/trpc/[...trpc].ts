@@ -263,12 +263,28 @@ export const appRouter = router({
 
   // System
   system: router({
-    health: publicProcedure.query(() => ({ 
-      status: "ok", 
-      timestamp: new Date().toISOString(),
-      version: "1.0.0",
-      environment: "production",
-    })),
+    health: publicProcedure.query(async () => {
+      let dbConnected = false;
+      let dbError = null;
+      try {
+        if (pool) {
+          const client = await pool.connect();
+          await client.query('SELECT 1');
+          client.release();
+          dbConnected = true;
+        }
+      } catch (e: any) {
+        dbError = e.message;
+      }
+      return { 
+        status: "ok", 
+        timestamp: new Date().toISOString(),
+        version: "1.0.0",
+        environment: "production",
+        database: dbConnected ? "connected" : "disconnected",
+        databaseError: dbError,
+      };
+    }),
   }),
 
   // AI
