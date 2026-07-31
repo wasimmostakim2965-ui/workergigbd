@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Pin,
   Star,
@@ -6,6 +6,7 @@ import {
   ArrowRight,
   Clock,
   Users,
+  ExternalLink,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -30,11 +31,25 @@ const categories = [
   { id: "design", label: "Design" },
 ];
 
+interface SiteConfig {
+  marquee: { enabled: boolean; message: string };
+  banner: { enabled: boolean; text: string; imageUrl: string; link: string };
+}
+
 export default function JobsPage() {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
+  const [siteConfig, setSiteConfig] = useState<SiteConfig | null>(null);
 
   const { data: jobs, isLoading } = trpc.jobs.list.useQuery();
+
+  // Load site config
+  useEffect(() => {
+    fetch("/site-config.json")
+      .then(res => res.json())
+      .then(data => setSiteConfig(data))
+      .catch(() => console.log("Site config not found"));
+  }, []);
 
   const jobList = jobs || [];
   const pinnedJobs = jobList.filter((j: any) => j.isPinned === 1);
@@ -42,13 +57,45 @@ export default function JobsPage() {
 
   return (
     <div className="space-y-4 px-4 py-4">
-      {/* JS Chart Banner */}
-      <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/50 rounded-xl px-4 py-2.5 flex items-center gap-2">
-        <Star className="h-4 w-4 fill-amber-500 text-amber-500" />
-        <span className="text-sm font-medium text-amber-700">
-          JS Chart: $13 Bonus → $25 Bonus → $50 Bonus
-        </span>
-      </div>
+      {/* Marquee Banner - from config */}
+      {siteConfig?.marquee?.enabled && siteConfig.marquee.message && (
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/50 rounded-xl px-4 py-2.5 overflow-hidden">
+          <div className="relative flex items-center">
+            <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-amber-50 to-transparent z-10" />
+            <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-orange-50 to-transparent z-10" />
+            <div className="overflow-hidden flex-1">
+              <p className="text-sm font-medium text-amber-700 whitespace-nowrap animate-marquee">
+                {siteConfig.marquee.message}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ad Banner - from config */}
+      {siteConfig?.banner?.enabled && (siteConfig.banner.text || siteConfig.banner.imageUrl) && (
+        <a
+          href={siteConfig.banner.link || "#"}
+          target={siteConfig.banner.link ? "_blank" : "_self"}
+          rel="noopener noreferrer"
+          className={`block rounded-xl overflow-hidden border transition-transform hover:scale-[1.01] ${
+            siteConfig.banner.link ? "cursor-pointer" : "pointer-events-none"
+          }`}
+        >
+          {siteConfig.banner.imageUrl ? (
+            <img
+              src={siteConfig.banner.imageUrl}
+              alt="Banner"
+              className="w-full h-auto max-h-40 object-contain bg-gradient-to-r from-slate-100 to-slate-50"
+            />
+          ) : (
+            <div className="p-4 bg-gradient-to-r from-amber-100 to-orange-100 flex items-center justify-center">
+              <p className="text-base font-semibold text-amber-800">{siteConfig.banner.text}</p>
+              {siteConfig.banner.link && <ExternalLink className="h-4 w-4 ml-2 text-amber-600" />}
+            </div>
+          )}
+        </a>
+      )}
 
       {/* Filter Row */}
       <div className="flex gap-2 items-center">

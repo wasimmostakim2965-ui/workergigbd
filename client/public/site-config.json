@@ -1,0 +1,12 @@
+{
+  "marquee": {
+    "enabled": false,
+    "message": "Welcome to WorkerGigBD! Complete tasks and earn money 💰"
+  },
+  "banner": {
+    "enabled": false,
+    "text": "Click Here for Special Offer!",
+    "imageUrl": "",
+    "link": ""
+  }
+}
