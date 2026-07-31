@@ -79,15 +79,15 @@ function Router() {
         <Route path={"/settings"} component={() => <DashboardLayout><SettingsPage /></DashboardLayout>} />
         <Route path={"/help"} component={() => <DashboardLayout><HelpPage /></DashboardLayout>} />
 
-        {/* Admin Panel */}
-        <Route path={"/admin"} component={() => <AdminLayout><AdminDashboard /></AdminLayout>} />
-        <Route path={"/admin/users"} component={() => <AdminLayout><AdminUsers /></AdminLayout>} />
-        <Route path={"/admin/jobs"} component={() => <AdminLayout><AdminJobs /></AdminLayout>} />
-        <Route path={"/admin/withdrawals"} component={() => <AdminLayout><AdminWithdrawals /></AdminLayout>} />
-        <Route path={"/admin/deposits"} component={() => <AdminLayout><AdminDeposits /></AdminLayout>} />
-        <Route path={"/admin/notifications"} component={() => <AdminLayout><AdminNotifications /></AdminLayout>} />
-        <Route path={"/admin/logs"} component={() => <AdminLayout><AdminLogs /></AdminLayout>} />
-        <Route path={"/admin/support"} component={() => <AdminLayout><AdminSupport /></AdminLayout>} />
+        {/* Admin Panel - Hidden URL for security */}
+        <Route path={"/wG8kL9mNpQ2rXv3Yz5hJ7sT6uF1dH4aB8cE9"} component={() => <AdminLayout><AdminDashboard /></AdminLayout>} />
+        <Route path={"/wG8kL9mNpQ2rXv3Yz5hJ7sT6uF1dH4aB8cE9/users"} component={() => <AdminLayout><AdminUsers /></AdminLayout>} />
+        <Route path={"/wG8kL9mNpQ2rXv3Yz5hJ7sT6uF1dH4aB8cE9/jobs"} component={() => <AdminLayout><AdminJobs /></AdminLayout>} />
+        <Route path={"/wG8kL9mNpQ2rXv3Yz5hJ7sT6uF1dH4aB8cE9/withdrawals"} component={() => <AdminLayout><AdminWithdrawals /></AdminLayout>} />
+        <Route path={"/wG8kL9mNpQ2rXv3Yz5hJ7sT6uF1dH4aB8cE9/deposits"} component={() => <AdminLayout><AdminDeposits /></AdminLayout>} />
+        <Route path={"/wG8kL9mNpQ2rXv3Yz5hJ7sT6uF1dH4aB8cE9/notifications"} component={() => <AdminLayout><AdminNotifications /></AdminLayout>} />
+        <Route path={"/wG8kL9mNpQ2rXv3Yz5hJ7sT6uF1dH4aB8cE9/logs"} component={() => <AdminLayout><AdminLogs /></AdminLayout>} />
+        <Route path={"/wG8kL9mNpQ2rXv3Yz5hJ7sT6uF1dH4aB8cE9/support"} component={() => <AdminLayout><AdminSupport /></AdminLayout>} />
 
         <Route path={"/404"} component={NotFound} />
         <Route component={NotFound} />

@@ -41,15 +41,18 @@ import { toast } from "sonner";
 // Admin password
 const ADMIN_PASSWORD = "Wasim@2965";
 
+// Hidden admin URL for security
+const ADMIN_BASE = "/wG8kL9mNpQ2rXv3Yz5hJ7sT6uF1dH4aB8cE9";
+
 const adminMenuItems = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/admin" },
-  { icon: Users, label: "Users", path: "/admin/users" },
-  { icon: Briefcase, label: "Jobs", path: "/admin/jobs" },
-  { icon: Wallet, label: "Withdrawals", path: "/admin/withdrawals" },
-  { icon: CreditCard, label: "Deposits", path: "/admin/deposits" },
-  { icon: Bell, label: "Notifications", path: "/admin/notifications" },
-  { icon: FileText, label: "Activity Logs", path: "/admin/logs" },
-  { icon: MessageCircle, label: "Support", path: "/admin/support" },
+  { icon: LayoutDashboard, label: "Dashboard", path: ADMIN_BASE },
+  { icon: Users, label: "Users", path: `${ADMIN_BASE}/users` },
+  { icon: Briefcase, label: "Jobs", path: `${ADMIN_BASE}/jobs` },
+  { icon: Wallet, label: "Withdrawals", path: `${ADMIN_BASE}/withdrawals` },
+  { icon: CreditCard, label: "Deposits", path: `${ADMIN_BASE}/deposits` },
+  { icon: Bell, label: "Notifications", path: `${ADMIN_BASE}/notifications` },
+  { icon: FileText, label: "Activity Logs", path: `${ADMIN_BASE}/logs` },
+  { icon: MessageCircle, label: "Support", path: `${ADMIN_BASE}/support` },
 ];
 
 function AdminSidebarContent({ children }: { children: React.ReactNode }) {
