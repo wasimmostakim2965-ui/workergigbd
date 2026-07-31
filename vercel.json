@@ -3,20 +3,6 @@
   "outputDirectory": "dist/public",
   "installCommand": "pnpm install --no-frozen-lockfile --ignore-scripts",
   "framework": null,
-  "rewrites": [
-    {
-      "source": "/api/trpc",
-      "destination": "/api/trpc"
-    },
-    {
-      "source": "/api/trpc/(.*)",
-      "destination": "/api/trpc"
-    },
-    {
-      "source": "/api/test",
-      "destination": "/api/test"
-    }
-  ],
   "headers": [
     {
       "source": "/assets/(.*)",
