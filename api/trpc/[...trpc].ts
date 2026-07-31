@@ -210,7 +210,7 @@ export const appRouter = router({
     requestDeposit: publicProcedure.input(z.object({
       amount: z.union([z.number().positive(), z.string()]),
       paymentMethod: z.string(),
-      paymentNumber: z.string(),
+      paymentNumber: z.string().optional(),
       transactionId: z.string(),
     })).mutation(async ({ input }) => {
       try {
@@ -218,13 +218,12 @@ export const appRouter = router({
         if (isNaN(amount) || amount <= 0) {
           return { success: false, error: "Invalid amount" };
         }
-        // Debug: Check if INSERT works
-        const sql = `INSERT INTO deposits ("userId", amount, "paymentMethod", "paymentNumber", "transactionId", status, "addedBy")
-                     VALUES (1, '${amount}', '${input.paymentMethod}', '${input.paymentNumber}', '${input.transactionId}', 'pending', 1) RETURNING id`;
-        console.log("[API] Deposit SQL:", sql);
-        const result = await query(sql);
-        console.log("[API] Deposit result:", result);
-        return { success: true, inserted: result };
+        // Insert without paymentNumber column
+        await query(
+          `INSERT INTO deposits ("userId", amount, "paymentMethod", "transactionId", status, "addedBy")
+           VALUES (1, '${amount}', '${input.paymentMethod}', '${input.transactionId}', 'pending', 1)`
+        );
+        return { success: true };
       } catch (error: any) {
         console.error("[API] Deposit error:", error);
         return { success: false, error: error.message || "Failed to submit deposit request" };
@@ -330,9 +329,9 @@ export const appRouter = router({
         if (!pool) return { error: "No pool", success: false };
         const client = await pool.connect();
         try {
-          // First check columns
-          const cols = await client.query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'deposits'`);
-          return { columns: cols.rows.map(r => r.column_name), success: true };
+          // Check withdrawalRequests columns
+          const cols = await client.query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'withdrawalRequests'`);
+          return { withdrawalColumns: cols.rows.map(r => r.column_name), success: true };
         } finally {
           client.release();
         }
