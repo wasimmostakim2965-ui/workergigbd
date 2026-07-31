@@ -39,10 +39,13 @@ export function useAuth(options?: UseAuthOptions) {
       throw error;
     } finally {
       // Clear the Preview auto-login token mirrored into sessionStorage, so
-      // header-based sessions (Safari ITP / WebView) are logged out too. The
-      // backend cookie is cleared by the logout mutation.
+      // header-based sessions (Safari ITP / WebView) are logged out too.
       try {
         sessionStorage.removeItem("manus-cookie");
+      } catch {}
+      // Clear the session cookie
+      try {
+        document.cookie = "app_session_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
       } catch {}
       utils.auth.me.setData(undefined, null);
       await utils.auth.me.invalidate();

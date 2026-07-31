@@ -1,6 +1,4 @@
-import { COOKIE_NAME } from "@shared/const";
 import { TRPCError } from "@trpc/server";
-import { getSessionCookieOptions } from "./_core/cookies";
 import { createEmailAccountAndSession, loginWithEmail } from "./_core/emailAuth";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
@@ -50,9 +48,7 @@ export const appRouter = router({
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
-      return { success: true } as const;
+      return { success: true, clearCookie: true } as const;
     }),
 
     // ── Email/password auth ──────────────────────────────────────────────
@@ -65,7 +61,7 @@ export const appRouter = router({
       password: z.string().min(8, "Password must be at least 8 characters"),
     })).mutation(async ({ input, ctx }) => {
       try {
-        const user = await createEmailAccountAndSession(ctx.req, ctx.res, input);
+        const user = await createEmailAccountAndSession(ctx.req, { headers: new Headers() } as any, input);
         return { success: true, user };
       } catch (error: any) {
         if (error?.message === "EMAIL_TAKEN") {
@@ -84,7 +80,7 @@ export const appRouter = router({
       password: z.string().min(1),
     })).mutation(async ({ input, ctx }) => {
       try {
-        const user = await loginWithEmail(ctx.req, ctx.res, input);
+        const user = await loginWithEmail(ctx.req, { headers: new Headers() } as any, input);
         return { success: true, user };
       } catch (error: any) {
         throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });

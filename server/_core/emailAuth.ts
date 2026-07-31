@@ -1,8 +1,8 @@
 import { COOKIE_NAME, ONE_DAY_MS } from "@shared/const";
 import bcrypt from "bcryptjs";
-import type { Request, Response } from "express";
+import type { Response } from "express";
 import * as db from "../db";
-import { getSessionCookieOptions } from "./cookies";
+import { getSessionCookieOptions, createSessionCookieHeader } from "./cookies";
 import { ENV } from "./env";
 import { sdk } from "./sdk";
 
@@ -22,13 +22,21 @@ export async function checkPassword(plain: string, hash: string): Promise<boolea
 }
 
 /** Mints the 24h session JWT and sets it as the session cookie on the response. */
-export async function issueSession(res: Response, req: Request, openId: string, name: string) {
+export async function issueSession(res: Response | { headers: Headers }, req: Request | { headers: Headers | Record<string, string | string[] | undefined> }, openId: string, name: string) {
   const token = await sdk.signSession(
     { openId, appId: ENV.appId, name },
     { expiresInMs: ONE_DAY_MS }
   );
   const cookieOptions = getSessionCookieOptions(req);
-  res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: ONE_DAY_MS });
+  const cookieHeader = createSessionCookieHeader(token, cookieOptions, ONE_DAY_MS);
+  
+  if (res instanceof Response) {
+    res.headers.append("Set-Cookie", cookieHeader);
+  } else if (res.headers instanceof Headers) {
+    res.headers.append("Set-Cookie", cookieHeader);
+  } else if (typeof res.setHeader === 'function') {
+    res.setHeader("Set-Cookie", cookieHeader);
+  }
 }
 
 export function generateEmailVerifyToken(): string {
@@ -47,8 +55,8 @@ export async function sendVerificationEmail(email: string, token: string) {
 }
 
 export async function createEmailAccountAndSession(
-  req: Request,
-  res: Response,
+  req: Request | { headers: Headers | Record<string, string | string[] | undefined> },
+  res: Response | { headers: Headers },
   params: { name: string; email: string; password: string }
 ) {
   const email = params.email.trim().toLowerCase();
@@ -81,8 +89,8 @@ export async function createEmailAccountAndSession(
 }
 
 export async function loginWithEmail(
-  req: Request,
-  res: Response,
+  req: Request | { headers: Headers | Record<string, string | string[] | undefined> },
+  res: Response | { headers: Headers },
   params: { email: string; password: string }
 ) {
   const email = params.email.trim().toLowerCase();
