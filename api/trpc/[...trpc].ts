@@ -284,7 +284,38 @@ export const appRouter = router({
       email: z.string().email(),
       password: z.string().min(8),
     })).mutation(async ({ input }) => {
-      return { success: true, user: { id: Date.now(), name: input.name, email: input.email, role: "user" } };
+      try {
+        // Check if user already exists
+        const existing = await query(`SELECT id FROM users WHERE email = $1`, [input.email.toLowerCase()]);
+        if (existing.length > 0) {
+          return { success: false, error: "Email already registered" };
+        }
+        
+        // Hash password
+        const passwordHash = await bcrypt.hash(input.password, 10);
+        
+        // Create user
+        const result = await query(
+          `INSERT INTO users (name, email, passwordHash, role, status, "createdAt", "updatedAt") 
+           VALUES ($1, $2, $3, 'user', 'active', NOW(), NOW()) 
+           RETURNING id, name, email, role`,
+          [input.name, input.email.toLowerCase(), passwordHash]
+        );
+        
+        const user = result[0];
+        return { 
+          success: true, 
+          user: { 
+            id: user.id, 
+            name: user.name, 
+            email: user.email, 
+            role: user.role 
+          } 
+        };
+      } catch (error: any) {
+        console.error("[API] Register error:", error);
+        return { success: false, error: error.message || "Registration failed" };
+      }
     }),
     login: publicProcedure.input(z.object({
       email: z.string().email(),
@@ -297,14 +328,17 @@ export const appRouter = router({
         }
         
         const user = users[0];
-        if (!user.passwordhash) {
+        if (!user.passwordHash) {
           return { success: false, error: "Invalid email or password" };
         }
         
-        const ok = await bcrypt.compare(input.password, user.passwordhash);
+        const ok = await bcrypt.compare(input.password, user.passwordHash);
         if (!ok) {
           return { success: false, error: "Invalid email or password" };
         }
+        
+        // Update last signed in
+        await query(`UPDATE users SET "lastSignedIn" = NOW() WHERE id = $1`, [user.id]);
         
         return { 
           success: true, 
