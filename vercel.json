@@ -1,12 +1,16 @@
 {
   "buildCommand": "pnpm install --no-frozen-lockfile && pnpm run build",
-  "outputDirectory": "dist",
+  "outputDirectory": "dist/public",
   "installCommand": "pnpm install --no-frozen-lockfile --ignore-scripts",
   "framework": null,
   "rewrites": [
     {
       "source": "/api/trpc/(.*)",
       "destination": "/api/trpc/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ],
   "headers": [
