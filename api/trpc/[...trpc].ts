@@ -37,7 +37,7 @@ export const appRouter = router({
       const client = await pool.connect();
       try {
         const usersResult = await client.query(`SELECT COUNT(*) as count FROM users`);
-        const jobsResult = await client.query(`SELECT COUNT(*) as count FROM jobs WHERE status = 'OPEN'`);
+        const jobsResult = await client.query(`SELECT COUNT(*) as count FROM jobs WHERE status = 'active'`);
         const earningsResult = await client.query(`SELECT COALESCE(SUM(amount), 0) as total FROM earnings`);
         
         return {
@@ -67,7 +67,7 @@ export const appRouter = router({
         const client = await pool.connect();
         try {
           const result = await client.query(
-            `SELECT * FROM jobs WHERE status = 'OPEN' ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+            `SELECT * FROM jobs WHERE status = 'active' ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
             [input.limit, input.offset]
           );
           return { jobs: result.rows, total: result.rows.length };
