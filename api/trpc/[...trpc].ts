@@ -219,8 +219,8 @@ export const appRouter = router({
           return { success: false, error: "Invalid amount" };
         }
         await query(
-          `INSERT INTO deposits (amount, "paymentMethod", "paymentNumber", "transactionId", status, "createdAt")
-           VALUES ($1, $2, $3, $4, 'pending', NOW())`,
+          `INSERT INTO deposits ("userId", amount, "paymentMethod", "paymentNumber", "transactionId", status, "addedBy", "createdAt")
+           VALUES (1, $1, $2, $3, $4, 'pending', 1, NOW())`,
           [amount, input.paymentMethod, input.paymentNumber, input.transactionId]
         );
         return { success: true };
