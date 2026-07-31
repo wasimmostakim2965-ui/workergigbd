@@ -316,11 +316,11 @@ export const appRouter = router({
   // Admin
   admin: router({
     debug: publicProcedure.query(async () => {
-      // Check deposits table
       try {
-        const result = await query(`SELECT * FROM deposits LIMIT 5`);
-        // Also try inserting a test row
-        return { deposits: result, success: true };
+        // Get count first
+        const count = await query(`SELECT COUNT(*) as cnt FROM deposits`);
+        const all = await query(`SELECT * FROM deposits LIMIT 10`);
+        return { count: count[0]?.cnt, deposits: all, success: true };
       } catch (error: any) {
         return { error: error.message, success: false };
       }
