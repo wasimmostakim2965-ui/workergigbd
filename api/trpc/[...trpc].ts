@@ -2,6 +2,7 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { initTRPC } from "@trpc/server";
 import superjson from "superjson";
 import { z } from "zod";
+import { Pool } from "pg";
 
 // ─── tRPC Setup ───
 const t = initTRPC.create({
@@ -10,14 +11,60 @@ const t = initTRPC.create({
 const router = t.router;
 const publicProcedure = t.procedure;
 
-// ─── Demo Data (when no database) ───
-const demoJobs = [
-  { id: 1, title: "Facebook Like & Share", category: "Social Media", pay: "15", status: "active", slotsRemaining: 35, description: "Like and share Facebook pages" },
-  { id: 2, title: "YouTube Subscribe", category: "Social Media", pay: "25", status: "active", slotsRemaining: 22, description: "Subscribe to YouTube channels" },
-  { id: 3, title: "Data Entry Work", category: "Freelancing", pay: "50", status: "active", slotsRemaining: 80, description: "Enter data from images" },
-  { id: 4, title: "App Download & Install", category: "App Testing", pay: "35", status: "active", slotsRemaining: 150, description: "Download and install apps" },
-  { id: 5, title: "Survey Completion", category: "Research", pay: "40", status: "active", slotsRemaining: 60, description: "Complete online surveys" },
-];
+// ─── Database Configuration ───
+const databaseUrl = process.env.DATABASE_URL;
+
+// Create connection pool only if DATABASE_URL is available
+const pool = databaseUrl ? new Pool({
+  connectionString: databaseUrl,
+  ssl: { rejectUnauthorized: false },
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+}) : null;
+
+// Database helper function
+async function query(sql: string, params?: any[]) {
+  if (!pool) {
+    console.warn("[API] Database not configured");
+    return [];
+  }
+  try {
+    const client = await pool.connect();
+    try {
+      const result = await client.query(sql, params);
+      return result.rows;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error("[API] Database query error:", error);
+    return [];
+  }
+}
+
+// ─── Get real stats from database ───
+async function getRealStats() {
+  try {
+    const users = await query(`SELECT COUNT(*) as count FROM users`);
+    const jobs = await query(`SELECT COUNT(*) as count FROM jobs WHERE status = 'active'`);
+    return {
+      totalUsers: parseInt(users[0]?.count || "0"),
+      totalJobs: parseInt(jobs[0]?.count || "0")
+    };
+  } catch {
+    return { totalUsers: 0, totalJobs: 0 };
+  }
+}
+
+// ─── Get real jobs from database ───
+async function getRealJobs() {
+  try {
+    return await query(`SELECT id, title, description, category, pay, status FROM jobs WHERE status = 'active' ORDER BY id DESC LIMIT 20`);
+  } catch {
+    return [];
+  }
+}
 
 // ─── App Router ───
 export const appRouter = router({
@@ -32,30 +79,39 @@ export const appRouter = router({
   // Stats - Public
   stats: router({
     public: publicProcedure.query(async () => {
-      return { 
-        totalUsers: Math.floor(Math.random() * 5000) + 1000, 
-        totalJobs: demoJobs.filter(j => j.status === "active").length 
-      };
+      return await getRealStats();
     }),
   }),
 
   // Jobs
   jobs: router({
     list: publicProcedure.query(async () => {
-      return demoJobs;
+      return await getRealJobs();
     }),
     getById: publicProcedure.input(z.object({ id: z.number() })).query(async ({ input }) => {
-      return demoJobs.find(j => j.id === input.id) || null;
+      const jobs = await query(`SELECT * FROM jobs WHERE id = $1`, [input.id]);
+      return jobs[0] || null;
     }),
     categories: publicProcedure.query(async () => {
-      return Array.from(new Set(demoJobs.map(j => j.category)));
+      const jobs = await query(`SELECT DISTINCT category FROM jobs WHERE status = 'active'`);
+      return jobs.map((j: any) => j.category);
     }),
     create: publicProcedure.input(z.object({
       title: z.string().min(1),
+      description: z.string().optional(),
       category: z.string().min(1),
       pay: z.union([z.number().min(0), z.string()]),
     })).mutation(async ({ input }) => {
-      return { success: true, job: { ...input, id: Date.now() } };
+      try {
+        const result = await query(
+          `INSERT INTO jobs (title, description, category, pay, status) VALUES ($1, $2, $3, $4, 'active') RETURNING *`,
+          [input.title, input.description || "", input.category, String(input.pay)]
+        );
+        return { success: true, job: result[0] };
+      } catch (error) {
+        console.error("[API] Create job error:", error);
+        return { success: false, error: "Failed to create job" };
+      }
     }),
   }),
 
@@ -101,9 +157,13 @@ export const appRouter = router({
       return { success: true };
     }),
     completeJob: publicProcedure.input(z.object({ jobId: z.number() })).mutation(async ({ input }) => {
-      const job = demoJobs.find(j => j.id === input.jobId);
-      if (!job) return { success: false };
-      return { success: true, amount: job.pay };
+      try {
+        const jobs = await query(`SELECT * FROM jobs WHERE id = $1`, [input.jobId]);
+        if (!jobs[0]) return { success: false };
+        return { success: true, amount: jobs[0].pay };
+      } catch {
+        return { success: false };
+      }
     }),
   }),
 
@@ -136,34 +196,69 @@ export const appRouter = router({
 
   // Admin
   admin: router({
-    users: publicProcedure.query(async () => [
-      { id: 1, name: "Admin User", email: "admin@example.com", role: "admin", status: "active" },
-      { id: 2, name: "Demo User", email: "demo@example.com", role: "user", status: "active" },
-    ]),
-    withdrawals: publicProcedure.query(async () => [
-      { id: 1, userId: 2, amount: "500", status: "pending", paymentMethod: "bkash" },
-      { id: 2, userId: 3, amount: "1000", status: "pending", paymentMethod: "nagad" },
-    ]),
-    deposits: publicProcedure.query(async () => [
-      { id: 1, userId: 2, amount: "1000", status: "approved" },
-    ]),
-    stats: publicProcedure.query(async () => ({
-      totalUsers: Math.floor(Math.random() * 5000) + 1000,
-      activeUsers: Math.floor(Math.random() * 3000) + 500,
-      totalJobs: demoJobs.length,
-      activeJobs: demoJobs.filter(j => j.status === "active").length,
-      pendingWithdrawals: Math.floor(Math.random() * 20) + 5,
-      totalWithdrawn: Math.floor(Math.random() * 50000) + 10000,
-      totalDeposits: Math.floor(Math.random() * 100000) + 20000,
-    })),
+    users: publicProcedure.query(async () => {
+      return await query(`SELECT id, name, email, role, status, "createdAt" FROM users ORDER BY "createdAt" DESC`);
+    }),
+    withdrawals: publicProcedure.query(async () => {
+      return await query(`SELECT * FROM "withdrawalRequests" ORDER BY "createdAt" DESC`);
+    }),
+    deposits: publicProcedure.query(async () => {
+      return await query(`SELECT * FROM deposits ORDER BY "createdAt" DESC`);
+    }),
+    stats: publicProcedure.query(async () => {
+      try {
+        const [users, jobs, withdrawals, totalDeposits, totalWithdrawn] = await Promise.all([
+          query(`SELECT COUNT(*) as count FROM users`),
+          query(`SELECT COUNT(*) as count FROM jobs WHERE status = 'active'`),
+          query(`SELECT COUNT(*) as count FROM "withdrawalRequests" WHERE status = 'pending'`),
+          query(`SELECT COALESCE(SUM(amount), 0) as total FROM deposits WHERE status = 'approved'`),
+          query(`SELECT COALESCE(SUM(amount), 0) as total FROM "withdrawalRequests" WHERE status = 'approved'`),
+        ]);
+        return {
+          totalUsers: parseInt(users[0]?.count || "0"),
+          activeUsers: parseInt(users[0]?.count || "0"),
+          totalJobs: parseInt(jobs[0]?.count || "0"),
+          activeJobs: parseInt(jobs[0]?.count || "0"),
+          pendingWithdrawals: parseInt(withdrawals[0]?.count || "0"),
+          totalWithdrawn: parseFloat(totalWithdrawn[0]?.total || "0"),
+          totalDeposits: parseFloat(totalDeposits[0]?.total || "0"),
+        };
+      } catch {
+        return {
+          totalUsers: 0,
+          activeUsers: 0,
+          totalJobs: 0,
+          activeJobs: 0,
+          pendingWithdrawals: 0,
+          totalWithdrawn: 0,
+          totalDeposits: 0,
+        };
+      }
+    }),
     updateWithdrawal: publicProcedure.input(z.object({
       id: z.number(),
       status: z.enum(["pending", "approved", "rejected"]),
-    })).mutation(async () => ({ success: true })),
+    })).mutation(async ({ input }) => {
+      try {
+        await query(`UPDATE "withdrawalRequests" SET status = $1 WHERE id = $2`, [input.status, input.id]);
+        return { success: true };
+      } catch (error) {
+        console.error("[API] Update withdrawal error:", error);
+        return { success: false };
+      }
+    }),
     updateDeposit: publicProcedure.input(z.object({
       id: z.number(),
       status: z.enum(["pending", "approved", "rejected"]),
-    })).mutation(async () => ({ success: true })),
+    })).mutation(async ({ input }) => {
+      try {
+        await query(`UPDATE deposits SET status = $1 WHERE id = $2`, [input.status, input.id]);
+        return { success: true };
+      } catch (error) {
+        console.error("[API] Update deposit error:", error);
+        return { success: false };
+      }
+    }),
   }),
 
   // System
