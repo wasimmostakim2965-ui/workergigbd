@@ -4,9 +4,6 @@ import { initTRPC } from "@trpc/server";
 import superjson from "superjson";
 import { z } from "zod";
 import { Pool } from "pg";
-import { eq, desc } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/node-postgres";
-import * as schema from "../../drizzle/schema";
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 
@@ -19,7 +16,7 @@ const protectedProcedure = t.procedure;
 const databaseUrl = process.env.DATABASE_URL;
 let pool: Pool | null = null;
 
-async function getDb() {
+async function getPool() {
   if (!databaseUrl) {
     console.warn("[API] DATABASE_URL not set");
     return null;
@@ -31,7 +28,19 @@ async function getDb() {
       max: 10,
     });
   }
-  return drizzle(pool, { schema });
+  return pool;
+}
+
+async function query(sql: string, params: any[] = []) {
+  const p = await getPool();
+  if (!p) return [];
+  try {
+    const result = await p.query(sql, params);
+    return result.rows;
+  } catch (error) {
+    console.error("[API] Query error:", error);
+    return [];
+  }
 }
 
 // ─── Auth ───
@@ -79,10 +88,7 @@ export const appRouter = router({
       email: z.string().email(),
       password: z.string().min(8),
     })).mutation(async ({ input }) => {
-      const database = await getDb();
-      if (!database) return { success: false, error: "Database not available" };
-
-      const existing = await database.select().from(schema.users).where(eq(schema.users.email, input.email.toLowerCase())).limit(1);
+      const existing = await query(`SELECT id FROM users WHERE email = $1`, [input.email.toLowerCase()]);
       if (existing.length > 0) {
         return { success: false, error: "Email already registered" };
       }
@@ -91,15 +97,11 @@ export const appRouter = router({
       const openId = `email_${crypto.randomUUID()}`;
 
       try {
-        await database.insert(schema.users).values({
-          openId,
-          name: input.name,
-          email: input.email.toLowerCase(),
-          passwordHash,
-          loginMethod: "email",
-          role: "user",
-          emailVerified: 0,
-        });
+        await query(
+          `INSERT INTO users (openid, name, email, passwordhash, loginmethod, role, emailverified) 
+           VALUES ($1, $2, $3, $4, 'email', 'user', 0)`,
+          [openId, input.name, input.email.toLowerCase(), passwordHash]
+        );
 
         const token = await signSession({ openId, name: input.name }, 24 * 60 * 60 * 1000);
         return { 
@@ -117,28 +119,25 @@ export const appRouter = router({
       email: z.string().email(),
       password: z.string().min(1),
     })).mutation(async ({ input }) => {
-      const database = await getDb();
-      if (!database) return { success: false, error: "Database not available" };
-
-      const users = await database.select().from(schema.users).where(eq(schema.users.email, input.email.toLowerCase())).limit(1);
+      const users = await query(`SELECT * FROM users WHERE email = $1`, [input.email.toLowerCase()]);
       if (users.length === 0) {
         return { success: false, error: "Invalid email or password" };
       }
 
       const user = users[0];
-      if (!user.passwordHash) {
+      if (!user.passwordhash) {
         return { success: false, error: "Invalid email or password" };
       }
 
-      const ok = await verifyPassword(input.password, user.passwordHash);
+      const ok = await verifyPassword(input.password, user.passwordhash);
       if (!ok) {
         return { success: false, error: "Invalid email or password" };
       }
 
-      const token = await signSession({ openId: user.openId, name: user.name }, 24 * 60 * 60 * 1000);
+      const token = await signSession({ openId: user.openid, name: user.name }, 24 * 60 * 60 * 1000);
       return { 
         success: true, 
-        user: { id: user.id, openId: user.openId, name: user.name, email: user.email, role: user.role },
+        user: { id: user.id, openId: user.openid, name: user.name, email: user.email, role: user.role },
         token 
       };
     }),
@@ -146,27 +145,21 @@ export const appRouter = router({
 
   jobs: router({
     list: publicProcedure.query(async () => {
-      const database = await getDb();
-      if (!database) return [];
-      const jobs = await database.select().from(schema.jobs).where(eq(schema.jobs.status, "active")).orderBy(desc(schema.jobs.createdAt)).limit(50);
-      return jobs;
+      return await query(`SELECT * FROM jobs WHERE status = 'active' ORDER BY "createdAt" DESC LIMIT 50`);
     }),
     categories: publicProcedure.query(async () => {
-      const database = await getDb();
-      if (!database) return [];
-      const jobs = await database.select({ category: schema.jobs.category }).from(schema.jobs).where(eq(schema.jobs.status, "active"));
-      return [...new Set(jobs.map(j => j.category))];
+      const jobs = await query(`SELECT DISTINCT category FROM jobs WHERE status = 'active'`);
+      return jobs.map((j: any) => j.category);
     }),
   }),
 
   earnings: router({
     balance: protectedProcedure.query(async ({ ctx }: any) => {
-      const database = await getDb();
-      if (!database || !ctx.userId) return { earning: "0", deposit: "0", totalWithdrawn: "0" };
+      if (!ctx.userId) return { earning: "0", deposit: "0", totalWithdrawn: "0" };
       
-      const earnings = await database.select().from(schema.earnings).where(eq(schema.earnings.userId, ctx.userId));
-      const deposits = await database.select().from(schema.deposits).where(eq(schema.deposits.userId, ctx.userId));
-      const withdrawals = await database.select().from(schema.withdrawalRequests).where(eq(schema.withdrawalRequests.userId, ctx.userId));
+      const earnings = await query(`SELECT amount FROM earnings WHERE "userId" = $1`, [ctx.userId]);
+      const deposits = await query(`SELECT amount, status FROM deposits WHERE "userId" = $1`, [ctx.userId]);
+      const withdrawals = await query(`SELECT amount, status FROM "withdrawalRequests" WHERE "userId" = $1`, [ctx.userId]);
       
       const totalEarnings = earnings.reduce((sum: number, e: any) => sum + Number(e.amount), 0);
       const totalDeposits = deposits.filter((d: any) => d.status === "approved").reduce((sum: number, d: any) => sum + Number(d.amount), 0);
@@ -183,17 +176,14 @@ export const appRouter = router({
       paymentMethod: z.string(),
       paymentNumber: z.string(),
     })).mutation(async ({ input, ctx }: any) => {
-      const database = await getDb();
-      if (!database || !ctx.userId) return { success: false, error: "Not authenticated" };
+      if (!ctx.userId) return { success: false, error: "Not authenticated" };
 
       try {
-        await database.insert(schema.withdrawalRequests).values({
-          userId: ctx.userId,
-          amount: input.amount.toString(),
-          paymentMethod: input.paymentMethod as any,
-          paymentNumber: input.paymentNumber,
-          status: "pending",
-        });
+        await query(
+          `INSERT INTO "withdrawalRequests" ("userId", amount, "paymentMethod", "paymentNumber", status) 
+           VALUES ($1, $2, $3, $4, 'pending')`,
+          [ctx.userId, input.amount, input.paymentMethod, input.paymentNumber]
+        );
         return { success: true };
       } catch (error) {
         console.error("[API] Withdraw error:", error);
@@ -205,36 +195,28 @@ export const appRouter = router({
   admin: router({
     users: protectedProcedure.query(async ({ ctx }: any) => {
       if (ctx.role !== "admin") return [];
-      const database = await getDb();
-      if (!database) return [];
-      return database.select().from(schema.users).orderBy(desc(schema.users.createdAt));
+      return await query(`SELECT id, name, email, role, status, "createdAt" FROM users ORDER BY "createdAt" DESC`);
     }),
     stats: protectedProcedure.query(async ({ ctx }: any) => {
       if (ctx.role !== "admin") return { totalUsers: 0, activeJobs: 0, pendingWithdrawals: 0 };
-      const database = await getDb();
-      if (!database) return { totalUsers: 0, activeJobs: 0, pendingWithdrawals: 0 };
       
-      const users = await database.select().from(schema.users);
-      const jobs = await database.select().from(schema.jobs).where(eq(schema.jobs.status, "active"));
-      const pending = await database.select().from(schema.withdrawalRequests).where(eq(schema.withdrawalRequests.status, "pending"));
+      const users = await query(`SELECT COUNT(*) as count FROM users`);
+      const jobs = await query(`SELECT COUNT(*) as count FROM jobs WHERE status = 'active'`);
+      const pending = await query(`SELECT COUNT(*) as count FROM "withdrawalRequests" WHERE status = 'pending'`);
       
       return {
-        totalUsers: users.length,
-        activeJobs: jobs.length,
-        pendingWithdrawals: pending.length,
+        totalUsers: parseInt(users[0]?.count || "0"),
+        activeJobs: parseInt(jobs[0]?.count || "0"),
+        pendingWithdrawals: parseInt(pending[0]?.count || "0"),
       };
     }),
     withdrawals: protectedProcedure.query(async ({ ctx }: any) => {
       if (ctx.role !== "admin") return [];
-      const database = await getDb();
-      if (!database) return [];
-      return database.select().from(schema.withdrawalRequests).orderBy(desc(schema.withdrawalRequests.createdAt));
+      return await query(`SELECT * FROM "withdrawalRequests" ORDER BY "createdAt" DESC`);
     }),
     deposits: protectedProcedure.query(async ({ ctx }: any) => {
       if (ctx.role !== "admin") return [];
-      const database = await getDb();
-      if (!database) return [];
-      return database.select().from(schema.deposits).orderBy(desc(schema.deposits.createdAt));
+      return await query(`SELECT * FROM deposits ORDER BY "createdAt" DESC`);
     }),
   }),
 });
@@ -257,12 +239,7 @@ const authMiddleware = async (req: Request) => {
     return { userId: null, role: null, openId: null };
   }
   
-  const database = await getDb();
-  if (!database) {
-    return { userId: null, role: null, openId: session.openId };
-  }
-  
-  const users = await database.select().from(schema.users).where(eq(schema.users.openId, session.openId)).limit(1);
+  const users = await query(`SELECT id, role FROM users WHERE openid = $1`, [session.openId]);
   const user = users[0];
   
   return {
