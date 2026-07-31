@@ -329,9 +329,11 @@ export const appRouter = router({
         if (!pool) return { error: "No pool", success: false };
         const client = await pool.connect();
         try {
-          // Check withdrawalRequests columns
-          const cols = await client.query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'withdrawalRequests'`);
-          return { withdrawalColumns: cols.rows.map(r => r.column_name), success: true };
+          // Insert into deposits
+          await client.query(`INSERT INTO deposits ("userId", amount, "paymentMethod", "transactionId", status, "addedBy") VALUES (1, '999.00', 'test', 'TEST123', 'pending', 1)`);
+          // Check deposits
+          const result = await client.query(`SELECT COUNT(*) as cnt FROM deposits`);
+          return { success: true, depositCount: result.rows[0]?.cnt };
         } finally {
           client.release();
         }
