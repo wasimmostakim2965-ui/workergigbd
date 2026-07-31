@@ -585,11 +585,29 @@ export const appRouter = router({
           [input.jobId]
         );
         
+        // Send notification to user about job completion
+        await query(
+          `INSERT INTO notifications (title, message, "userId", type, "isRead", "createdAt")
+           VALUES ($1, $2, $3, 'earning', 0, NOW())`,
+          [
+            '🎉 Job Completed - Payment Earned!',
+            `Congratulations! You earned ৳${amount.toLocaleString('en-BD')} for completing "${job.title}".`,
+            userId
+          ]
+        );
+        
         return { success: true, amount };
       } catch (error) {
         console.error("[API] Complete job error:", error);
         return { success: false, error: "Failed to complete job" };
       }
+    }),
+    
+    // User's deposit history
+    userDeposits: publicProcedure.query(async ({ ctx }) => {
+      const userId = (ctx as any).session?.userId;
+      if (!userId) return [];
+      return await query(`SELECT * FROM deposits WHERE "userId" = $1 ORDER BY "createdAt" DESC LIMIT 50`, [userId]);
     }),
   }),
 
