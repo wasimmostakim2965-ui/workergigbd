@@ -285,8 +285,10 @@ export const appRouter = router({
       password: z.string().min(8),
     })).mutation(async ({ input }) => {
       try {
+        const email = input.email.toLowerCase();
+        
         // Check if user already exists
-        const existing = await query(`SELECT id FROM users WHERE email = $1`, [input.email.toLowerCase()]);
+        const existing = await query(`SELECT id FROM users WHERE email = $1`, [email]);
         if (existing.length > 0) {
           return { success: false, error: "Email already registered" };
         }
@@ -294,15 +296,23 @@ export const appRouter = router({
         // Hash password
         const passwordHash = await bcrypt.hash(input.password, 10);
         
-        // Create user
-        const result = await query(
+        // Create user - use simple INSERT without RETURNING first
+        await query(
           `INSERT INTO users (name, email, passwordHash, role, status, "createdAt", "updatedAt") 
-           VALUES ($1, $2, $3, 'user', 'active', NOW(), NOW()) 
-           RETURNING id, name, email, role`,
-          [input.name, input.email.toLowerCase(), passwordHash]
+           VALUES ($1, $2, $3, 'user', 'active', NOW(), NOW())`,
+          [input.name, email, passwordHash]
         );
         
-        const user = result[0];
+        // Get the newly created user
+        const newUsers = await query(`SELECT id, name, email, role FROM users WHERE email = $1`, [email]);
+        
+        if (!newUsers || newUsers.length === 0) {
+          return { success: false, error: "User created but failed to retrieve" };
+        }
+        
+        const user = newUsers[0];
+        console.log("[Register] Created user:", user.id, user.email);
+        
         return { 
           success: true, 
           user: { 
