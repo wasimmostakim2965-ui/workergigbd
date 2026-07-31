@@ -315,6 +315,15 @@ export const appRouter = router({
 
   // Admin
   admin: router({
+    debug: publicProcedure.query(async () => {
+      // Check deposits table
+      try {
+        const result = await query(`SELECT * FROM deposits LIMIT 5`);
+        return { deposits: result, success: true };
+      } catch (error: any) {
+        return { error: error.message, success: false };
+      }
+    }),
     users: publicProcedure.query(async () => {
       return await query(`SELECT id, name, email, role, status, "createdAt" FROM users ORDER BY "createdAt" DESC`);
     }),
