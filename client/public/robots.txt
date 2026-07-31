@@ -1,8 +1,13 @@
 # WorkerGigBD Robots.txt
+# This file instructs search engines which pages should NOT be indexed
+
 User-agent: *
 Allow: /
-Disallow: /admin
+
+# Block search engines from indexing authenticated/user-specific pages
+# These pages require login and contain personal user data
 Disallow: /dashboard
+Disallow: /jobs
 Disallow: /earnings
 Disallow: /profile
 Disallow: /notifications
@@ -13,9 +18,25 @@ Disallow: /deposit
 Disallow: /withdraw
 Disallow: /withdraw-history
 Disallow: /deposit-history
+Disallow: /leaderboard
+Disallow: /help
+Disallow: /faq
 
-# Crawl-delay for polite crawling
+# Block admin panel path (hidden URL for extra security)
+Disallow: /wG8kL9mNpQ2rXv3Yz5hJ7sT6uF1dH4aB8cE9*
+
+# Block API endpoints from indexing
+Disallow: /api/
+
+# Block internal paths
+Disallow: /manus-storage/
+Disallow: /__manus__/
+
+# Crawl delay for polite crawling (optional)
 Crawl-delay: 1
 
 # Sitemap location
 Sitemap: https://workergigbd.site/sitemap.xml
+
+# Host directive
+Host: https://workergigbd.vercel.app
