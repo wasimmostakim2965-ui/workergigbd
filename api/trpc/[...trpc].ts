@@ -1,5 +1,6 @@
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { initTRPC } from "@trpc/server";
+import superjson from "superjson";
 import { z } from "zod";
 import { Pool } from "pg";
 
@@ -332,6 +333,7 @@ const handler = (req: Request) =>
     req,
     router: appRouter,
     createContext,
+    transformer: superjson,
     onError: ({ error }) => console.error("tRPC Error:", error),
   });
 
