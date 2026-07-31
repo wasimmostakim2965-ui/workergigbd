@@ -1,0 +1,30 @@
+# Dependencies
+node_modules
+
+# Development files
+.env
+.env.*
+*.log
+*.test.ts
+*.spec.ts
+
+# Docs
+README.md
+*.md
+
+# IDE
+.vscode
+.idea
+
+# Git
+.git
+
+# Testing
+coverage
+
+# Database
+drizzle
+*.db
+
+# Local files
+server/local-db.ts
