@@ -470,6 +470,18 @@ export const appRouter = router({
            VALUES ($1, $2, $3, $4, 'pending', NOW())`,
           [userId, amount, input.paymentMethod, input.paymentNumber]
         );
+        
+        // Send notification to user
+        await query(
+          `INSERT INTO notifications (title, message, "userId", type, "isRead", "createdAt")
+           VALUES ($1, $2, $3, 'payment', 0, NOW())`,
+          [
+            'Withdrawal Request Submitted',
+            `Your withdrawal request for ৳${amount.toLocaleString('en-BD')} has been submitted and is pending approval.`,
+            userId
+          ]
+        );
+        
         return { success: true };
       } catch (error) {
         console.error("[API] Withdraw error:", error);
@@ -503,6 +515,18 @@ export const appRouter = router({
            VALUES ($1, $2, $3, $4, 'pending', $5)`,
           [userId, amount, input.paymentMethod, input.transactionId, userId]
         );
+        
+        // Send notification to user
+        await query(
+          `INSERT INTO notifications (title, message, "userId", type, "isRead", "createdAt")
+           VALUES ($1, $2, $3, 'payment', 0, NOW())`,
+          [
+            'Deposit Request Submitted',
+            `Your deposit request for ৳${amount.toLocaleString('en-BD')} via ${input.paymentMethod.toUpperCase()} has been submitted and is pending approval.`,
+            userId
+          ]
+        );
+        
         return { success: true };
       } catch (error: any) {
         console.error("[API] Deposit error:", error);
@@ -710,14 +734,14 @@ export const appRouter = router({
           return { success: false, error: "Withdrawal request not found" };
         }
         
+        const amount = parseFloat(withdrawal.amount);
+        const userId = withdrawal.userId;
+        
         // Update withdrawal status
         await query(`UPDATE "withdrawalRequests" SET status = $1 WHERE id = $2`, [input.status, input.id]);
         
         // If approved, deduct from user's earning balance
         if (input.status === "approved") {
-          const amount = parseFloat(withdrawal.amount);
-          const userId = withdrawal.userId;
-          
           // Deduct from user's earning balance
           await query(`
             INSERT INTO "userBalances" ("userId", earning, "updatedAt")
@@ -730,6 +754,34 @@ export const appRouter = router({
           
           console.log(`[Withdrawal] Deducted ${amount} from user ${userId} balance`);
         }
+        
+        // Send notification to user about status change
+        let notificationTitle = '';
+        let notificationMessage = '';
+        
+        if (input.status === "approved") {
+          notificationTitle = 'Withdrawal Approved!';
+          notificationMessage = `Your withdrawal request for ৳${amount.toLocaleString('en-BD')} has been approved and will be processed soon.`;
+        } else if (input.status === "rejected") {
+          notificationTitle = 'Withdrawal Rejected';
+          notificationMessage = `Your withdrawal request for ৳${amount.toLocaleString('en-BD')} has been rejected. The amount has been refunded to your earning balance.`;
+          
+          // Refund amount if rejected
+          await query(`
+            INSERT INTO "userBalances" ("userId", earning, "updatedAt")
+            VALUES ($1, $2, NOW())
+            ON CONFLICT ("userId") 
+            DO UPDATE SET 
+              earning = "userBalances".earning + $2,
+              "updatedAt" = NOW()
+          `, [userId, amount]);
+        }
+        
+        await query(
+          `INSERT INTO notifications (title, message, "userId", type, "isRead", "createdAt")
+           VALUES ($1, $2, $3, 'payment', 0, NOW())`,
+          [notificationTitle, notificationMessage, userId]
+        );
         
         return { success: true };
       } catch (error: any) {
@@ -751,6 +803,9 @@ export const appRouter = router({
           return { success: false, error: "Deposit not found" };
         }
         
+        const amount = parseFloat(deposit.amount);
+        const userId = deposit.userId;
+        
         // Update deposit status
         await query(
           `UPDATE deposits SET status = $1, note = $2 WHERE id = $3`,
@@ -759,8 +814,6 @@ export const appRouter = router({
         
         // If approved, add to user balance
         if (input.status === "approved") {
-          const amount = parseFloat(deposit.amount);
-          
           // Insert or update user balance (deposit column)
           await query(`
             INSERT INTO "userBalances" ("userId", deposit, "updatedAt")
@@ -769,9 +822,29 @@ export const appRouter = router({
             DO UPDATE SET 
               deposit = "userBalances".deposit + $2,
               "updatedAt" = NOW()
-          `, [deposit.userId, amount]);
+          `, [userId, amount]);
           
-          console.log(`[Deposit] Added ${amount} to user ${deposit.userId} balance`);
+          console.log(`[Deposit] Added ${amount} to user ${userId} balance`);
+        }
+        
+        // Send notification to user about status change
+        let notificationTitle = '';
+        let notificationMessage = '';
+        
+        if (input.status === "approved") {
+          notificationTitle = 'Deposit Approved!';
+          notificationMessage = `Your deposit of ৳${amount.toLocaleString('en-BD')} has been approved and added to your balance.`;
+        } else if (input.status === "rejected") {
+          notificationTitle = 'Deposit Rejected';
+          notificationMessage = `Your deposit of ৳${amount.toLocaleString('en-BD')} has been rejected.${input.adminNote ? ' Reason: ' + input.adminNote : ''}`;
+        }
+        
+        if (notificationTitle) {
+          await query(
+            `INSERT INTO notifications (title, message, "userId", type, "isRead", "createdAt")
+             VALUES ($1, $2, $3, 'payment', 0, NOW())`,
+            [notificationTitle, notificationMessage, userId]
+          );
         }
         
         return { success: true };
