@@ -3,6 +3,13 @@ import { initTRPC } from "@trpc/server";
 import superjson from "superjson";
 import { z } from "zod";
 import { Pool } from "pg";
+import { parse as parseCookieHeader } from "cookie";
+import { SignJWT, jwtVerify } from "jose";
+import * as db from "../server/db";
+
+// ─── Constants ───
+const COOKIE_NAME = "workergigbd-session";
+const COOKIE_SECRET = process.env.COOKIE_SECRET || "workergigbd-jwt-secret-2024-secure-key-32chars";
 
 // ─── Database Pool ───
 const pool = new Pool({
@@ -11,11 +18,59 @@ const pool = new Pool({
   max: 5,
 });
 
+// ─── Auth Helper Functions ───
+async function getSessionSecret() {
+  return new TextEncoder().encode(COOKIE_SECRET);
+}
+
+async function verifySession(cookieValue: string | undefined | null) {
+  if (!cookieValue) return null;
+  try {
+    const secretKey = await getSessionSecret();
+    const { payload } = await jwtVerify(cookieValue, secretKey, { algorithms: ["HS256"] });
+    return payload as { openId: string; appId: string; name: string };
+  } catch {
+    return null;
+  }
+}
+
+async function authenticateRequest(req: Request) {
+  // 1. Get session token from cookie
+  const cookieHeader = req.headers.get("cookie") || "";
+  const cookies = parseCookieHeader(cookieHeader);
+  let sessionToken = cookies.get(COOKIE_NAME);
+
+  // 2. Fallback to Authorization header
+  if (!sessionToken) {
+    const authHeader = req.headers.get("authorization");
+    if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
+      sessionToken = authHeader.slice(7);
+    }
+  }
+
+  const session = await verifySession(sessionToken);
+  if (!session) return null;
+
+  // Get user from database
+  const user = await db.getUserByOpenId(session.openId);
+  return user;
+}
+
+// ─── Context Type ───
+type Context = {
+  userId?: number;
+  role?: string;
+  user?: db.User | null;
+};
+
 // ─── tRPC Setup ───
-const t = initTRPC.context<{ userId?: number; role?: string }>().create();
+const t = initTRPC.context<Context>().create();
 const router = t.router;
 const publicProcedure = t.procedure;
-const protectedProcedure = t.procedure.use(async ({ ctx, next }) => next({ ctx }));
+const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
+  if (!ctx.userId) throw new Error("UNAUTHORIZED");
+  return next({ ctx });
+});
 const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
   if (ctx.role !== "admin") throw new Error("Admin access required");
   return next({ ctx });
@@ -319,11 +374,12 @@ export const appRouter = router({
 export type AppRouter = typeof appRouter;
 
 // ─── Handler ───
-function createContext({ req }: any) {
-  const userIdHeader = req.headers.get("x-user-id");
+async function createContext({ req }: { req: Request }): Promise<Context> {
+  const user = await authenticateRequest(req);
   return {
-    userId: userIdHeader ? parseInt(userIdHeader, 10) : undefined,
-    role: req.headers.get("x-user-role") || "user",
+    userId: user?.id,
+    role: user?.role || "user",
+    user,
   };
 }
 

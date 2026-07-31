@@ -2,7 +2,7 @@ import { eq, desc, and, sql, like, gte, lte, count } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import {
-  InsertUser, users, userStatusEnum,
+  InsertUser, users, type User, userStatusEnum,
   jobs, type InsertJob,
   earnings, type InsertEarning,
   withdrawalRequests, type InsertWithdrawalRequest,
@@ -14,6 +14,8 @@ import {
   supportMessages, type InsertSupportMessage,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
+
+export type { User };
 
 // Check if we should use local database (fallback)
 const USE_LOCAL_DB = process.env.USE_LOCAL_DB === 'true' || !process.env.DATABASE_URL;
