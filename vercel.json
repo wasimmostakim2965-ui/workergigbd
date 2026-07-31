@@ -3,10 +3,19 @@
   "outputDirectory": "dist/public",
   "installCommand": "pnpm install --no-frozen-lockfile --ignore-scripts",
   "framework": null,
+  "functions": {
+    "api/**/*.ts": {
+      "runtime": "nodejs20.x"
+    }
+  },
   "rewrites": [
     {
+      "source": "/api/trpc",
+      "destination": "/api/trpc"
+    },
+    {
       "source": "/api/trpc/(.*)",
-      "destination": "/api/trpc/$1"
+      "destination": "/api/trpc"
     },
     {
       "source": "/api/test",

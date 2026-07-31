@@ -53,11 +53,18 @@ const ALLOWED_JOB_UPDATE_COLUMNS = new Set(['title', 'description', 'category', 
 const ALLOWED_USER_UPDATE_COLUMNS = new Set(['name', 'email', 'phone']);
 
 // ─── Database Pool ───
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+const databaseUrl = process.env.DATABASE_URL;
+
+if (!databaseUrl) {
+  console.warn("[API] DATABASE_URL not set - API will return demo data only");
+}
+
+// Only create pool if DATABASE_URL is available
+const pool = databaseUrl ? new Pool({
+  connectionString: databaseUrl,
   ssl: { rejectUnauthorized: false },
   max: 5,
-});
+}) : null;
 
 // ─── Auth Helper Functions ───
 async function getSessionSecret() {
@@ -119,6 +126,10 @@ const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
 
 // ─── Helper Functions ───
 async function query(sql: string, params?: any[]) {
+  if (!pool) {
+    console.warn("[API] Database not configured, skipping query");
+    return [];
+  }
   const client = await pool.connect();
   try {
     const result = await client.query(sql, params);
