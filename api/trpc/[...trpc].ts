@@ -1,9 +1,12 @@
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { initTRPC } from "@trpc/server";
+import superjson from "superjson";
 import { z } from "zod";
 
 // ─── tRPC Setup ───
-const t = initTRPC.create();
+const t = initTRPC.create({
+  transformer: superjson,
+});
 const router = t.router;
 const publicProcedure = t.procedure;
 
@@ -191,6 +194,7 @@ const handler = (req: Request) =>
     endpoint: "/api/trpc",
     req,
     router: appRouter,
+    createContext: () => ({}),
     onError: ({ error }) => console.error("tRPC Error:", error),
   });
 
