@@ -15,7 +15,14 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   const loginMutation = trpc.auth.login.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (data) => {
+      // Store the session token for API authentication
+      if (data.token) {
+        // Store in sessionStorage for API header (matching main.tsx expectation)
+        try {
+          sessionStorage.setItem("manus-cookie", `${data.token}`);
+        } catch {}
+      }
       await utils.auth.me.invalidate();
       setLocation("/dashboard");
     },

@@ -350,8 +350,20 @@ export const appRouter = router({
         // Update last signed in
         await query(`UPDATE users SET "lastSignedIn" = NOW() WHERE id = $1`, [user.id]);
         
+        // Create JWT session token
+        const secretKey = new TextEncoder().encode(COOKIE_SECRET);
+        const token = await new jose.SignJWT({ 
+          openId: user.openId,
+          userId: user.id 
+        })
+          .setProtectedHeader({ alg: "HS256" })
+          .setIssuedAt()
+          .setExpirationTime("7d")
+          .sign(secretKey);
+        
         return { 
           success: true, 
+          token, // Return token for client to store
           user: { 
             id: user.id, 
             name: user.name, 
