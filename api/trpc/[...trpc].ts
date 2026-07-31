@@ -165,31 +165,81 @@ export const appRouter = router({
   // Earnings
   earnings: router({
     balance: publicProcedure.query(async () => {
-      return { earning: "125.50", deposit: "50.00", totalWithdrawn: "75.50" };
+      try {
+        const [earnings, deposits, withdrawals] = await Promise.all([
+          query(`SELECT COALESCE(SUM(CAST(amount AS NUMERIC)), 0) as total FROM earnings`),
+          query(`SELECT COALESCE(SUM(CAST(amount AS NUMERIC)), 0) as total FROM deposits WHERE status = 'approved'`),
+          query(`SELECT COALESCE(SUM(CAST(amount AS NUMERIC)), 0) as total FROM "withdrawalRequests" WHERE status IN ('approved', 'processed')`),
+        ]);
+        return {
+          earning: earnings[0]?.total || "0",
+          deposit: deposits[0]?.total || "0",
+          totalWithdrawn: withdrawals[0]?.total || "0"
+        };
+      } catch {
+        return { earning: "0", deposit: "0", totalWithdrawn: "0" };
+      }
     }),
-    list: publicProcedure.query(async () => []),
+    list: publicProcedure.query(async () => {
+      return await query(`SELECT * FROM earnings ORDER BY "createdAt" DESC LIMIT 50`);
+    }),
     withdraw: publicProcedure.input(z.object({
       amount: z.union([z.number().positive(), z.string()]),
       paymentMethod: z.string(),
       paymentNumber: z.string(),
-    })).mutation(async () => {
-      return { success: true };
+    })).mutation(async ({ input }) => {
+      try {
+        const amount = typeof input.amount === 'string' ? parseFloat(input.amount) : input.amount;
+        if (isNaN(amount) || amount <= 0) {
+          return { success: false, error: "Invalid amount" };
+        }
+        await query(
+          `INSERT INTO "withdrawalRequests" ("userId", amount, "paymentMethod", "paymentNumber", status, "createdAt")
+           VALUES (1, $1, $2, $3, 'pending', NOW())`,
+          [amount, input.paymentMethod, input.paymentNumber]
+        );
+        return { success: true };
+      } catch (error) {
+        console.error("[API] Withdraw error:", error);
+        return { success: false, error: "Failed to submit withdrawal request" };
+      }
     }),
-    userWithdrawals: publicProcedure.query(async () => []),
+    userWithdrawals: publicProcedure.query(async () => {
+      return await query(`SELECT * FROM "withdrawalRequests" ORDER BY "createdAt" DESC LIMIT 50`);
+    }),
     requestDeposit: publicProcedure.input(z.object({
       amount: z.union([z.number().positive(), z.string()]),
       paymentMethod: z.string(),
       paymentNumber: z.string(),
       transactionId: z.string(),
-    })).mutation(async () => {
-      return { success: true };
+    })).mutation(async ({ input }) => {
+      try {
+        const amount = typeof input.amount === 'string' ? parseFloat(input.amount) : input.amount;
+        if (isNaN(amount) || amount <= 0) {
+          return { success: false, error: "Invalid amount" };
+        }
+        await query(
+          `INSERT INTO deposits (amount, "paymentMethod", "paymentNumber", "transactionId", status, "createdAt")
+           VALUES ($1, $2, $3, $4, 'pending', NOW())`,
+          [amount, input.paymentMethod, input.paymentNumber, input.transactionId]
+        );
+        return { success: true };
+      } catch (error) {
+        console.error("[API] Deposit error:", error);
+        return { success: false, error: "Failed to submit deposit request" };
+      }
     }),
     completeJob: publicProcedure.input(z.object({ jobId: z.number() })).mutation(async ({ input }) => {
       try {
         const jobs = await query(`SELECT * FROM jobs WHERE id = $1`, [input.jobId]);
         if (!jobs[0]) return { success: false };
+        await query(
+          `INSERT INTO earnings (amount, status, "createdAt") VALUES ($1, 'completed', NOW())`,
+          [jobs[0].pay]
+        );
         return { success: true, amount: jobs[0].pay };
-      } catch {
+      } catch (error) {
+        console.error("[API] Complete job error:", error);
         return { success: false };
       }
     }),
@@ -208,9 +258,36 @@ export const appRouter = router({
 
   // Notifications
   notifications: router({
-    list: publicProcedure.query(async () => []),
-    unreadCount: publicProcedure.query(async () => ({ count: 0 })),
-    markRead: publicProcedure.input(z.object({ id: z.number() })).mutation(async () => ({ success: true })),
+    list: publicProcedure.query(async () => {
+      return await query(`SELECT * FROM notifications ORDER BY "createdAt" DESC LIMIT 50`);
+    }),
+    unreadCount: publicProcedure.query(async () => {
+      const result = await query(`SELECT COUNT(*) as count FROM notifications WHERE read = false`);
+      return { count: parseInt(result[0]?.count || "0") };
+    }),
+    markRead: publicProcedure.input(z.object({ id: z.number() })).mutation(async ({ input }) => {
+      try {
+        await query(`UPDATE notifications SET read = true WHERE id = $1`, [input.id]);
+        return { success: true };
+      } catch {
+        return { success: false };
+      }
+    }),
+    create: publicProcedure.input(z.object({
+      title: z.string(),
+      message: z.string(),
+      type: z.string().optional(),
+    })).mutation(async ({ input }) => {
+      try {
+        await query(
+          `INSERT INTO notifications (title, message, type, "createdAt") VALUES ($1, $2, $3, NOW())`,
+          [input.title, input.message, input.type || 'info']
+        );
+        return { success: true };
+      } catch {
+        return { success: false };
+      }
+    }),
   }),
 
   // Support
@@ -218,8 +295,21 @@ export const appRouter = router({
     create: publicProcedure.input(z.object({
       subject: z.string().optional(),
       message: z.string().min(1),
-    })).mutation(async () => ({ success: true })),
-    list: publicProcedure.query(async () => []),
+    })).mutation(async ({ input }) => {
+      try {
+        await query(
+          `INSERT INTO "supportMessages" (subject, message, status, "createdAt") VALUES ($1, $2, 'open', NOW())`,
+          [input.subject || 'No Subject', input.message]
+        );
+        return { success: true };
+      } catch (error) {
+        console.error("[API] Support create error:", error);
+        return { success: false, error: "Failed to create support ticket" };
+      }
+    }),
+    list: publicProcedure.query(async () => {
+      return await query(`SELECT * FROM "supportMessages" ORDER BY "createdAt" DESC LIMIT 50`);
+    }),
   }),
 
   // Admin
