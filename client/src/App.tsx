@@ -14,6 +14,7 @@ const Home = lazy(() => import("./pages/Home"));
 const AboutPage = lazy(() => import("./pages/AboutPage"));
 const PrivacyPage = lazy(() => import("./pages/PrivacyPage"));
 const TermsPage = lazy(() => import("./pages/TermsPage"));
+const FAQPage = lazy(() => import("./pages/FAQPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
 const VerifyEmailPage = lazy(() => import("./pages/VerifyEmailPage"));
@@ -57,6 +58,7 @@ function Router() {
         <Route path={"/about"} component={AboutPage} />
         <Route path={"/privacy"} component={PrivacyPage} />
         <Route path={"/terms"} component={TermsPage} />
+        <Route path={"/faq"} component={FAQPage} />
         <Route path={"/login"} component={LoginPage} />
         <Route path={"/register"} component={RegisterPage} />
         <Route path={"/verify-email"} component={VerifyEmailPage} />

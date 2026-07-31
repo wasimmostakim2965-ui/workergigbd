@@ -3,7 +3,7 @@
  * Design: Professional Corporate — Deep Blue + Emerald
  * Sections: Hero, Features, How It Works, Stats, CTA, Footer
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
@@ -143,6 +143,11 @@ export default function Home() {
   const [, setLocation] = useLocation();
   const statsQuery = trpc.stats.public.useQuery();
 
+  useEffect(() => {
+    // Homepage SEO is already set in index.html
+    document.title = "WorkerGigBD - Bangladesh's #1 Micro-Task Freelancing Platform | Earn Money Online";
+  }, []);
+
   const handleGetStarted = () => {
     setLocation(isAuthenticated ? "/dashboard" : "/register");
   };
@@ -153,6 +158,49 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Service Schema */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "Service",
+            "name": "WorkerGigBD Micro-Task Platform",
+            "description": "Bangladesh's most trusted micro-task freelancing platform. Complete simple online tasks and earn real money via bKash, Nagad, Rocket.",
+            "provider": {
+              "@type": "Organization",
+              "name": "WorkerGigBD",
+              "url": "https://workergigbd.site"
+            },
+            "areaServed": {
+              "@type": "Country",
+              "name": "Bangladesh"
+            },
+            "serviceType": "Freelancing Platform"
+          })
+        }}
+      />
+      
+      {/* LocalBusiness Schema */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "LocalBusiness",
+            "name": "WorkerGigBD",
+            "description": "Micro-task freelancing platform in Bangladesh",
+            "address": {
+              "@type": "PostalAddress",
+              "addressLocality": "Dhaka",
+              "addressCountry": "BD"
+            },
+            "areaServed": "Bangladesh",
+            "priceRange": "$$"
+          })
+        }}
+      />
+      
       {/* ─── Navbar ─── */}
       <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-border/50">
         <div className="container flex items-center justify-between h-16">
@@ -171,9 +219,11 @@ export default function Home() {
 
           {/* Nav Links - Desktop */}
           <div className="hidden md:flex items-center gap-8">
+            <a href="/jobs" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Jobs</a>
             <a href="#features" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Features</a>
             <a href="#how-it-works" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">How It Works</a>
             <a href="/about" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">About</a>
+            <a href="/faq" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">FAQ</a>
           </div>
 
           {/* CTA Buttons */}
@@ -546,7 +596,8 @@ export default function Home() {
             <div>
               <h4 className="font-heading font-semibold text-white mb-4 text-sm">Help</h4>
               <ul className="space-y-2.5 text-sm text-white/50">
-                <li><a href="mailto:support@workergigbd.com" className="hover:text-white transition-colors">Contact</a></li>
+                <li><a href="/faq" className="hover:text-white transition-colors">FAQ</a></li>
+                <li><a href="/help" className="hover:text-white transition-colors">Support</a></li>
                 <li><a href="/terms" className="hover:text-white transition-colors">Terms & Conditions</a></li>
                 <li><a href="/privacy" className="hover:text-white transition-colors">Privacy Policy</a></li>
               </ul>
