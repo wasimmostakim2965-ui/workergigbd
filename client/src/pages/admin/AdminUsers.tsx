@@ -11,6 +11,18 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { formatDistanceToNow, format } from "date-fns";
 
+// Safe date formatter
+const safeFormatDate = (date: any, formatStr: string = 'PP') => {
+  if (!date) return 'N/A';
+  try {
+    const parsed = new Date(date);
+    if (isNaN(parsed.getTime())) return 'N/A';
+    return format(parsed, formatStr);
+  } catch {
+    return 'N/A';
+  }
+};
+
 export default function AdminUsers() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUser, setSelectedUser] = useState<any>(null);
@@ -197,7 +209,7 @@ export default function AdminUsers() {
       return (
         u.name?.toLowerCase().includes(query) ||
         u.email?.toLowerCase().includes(query) ||
-        u.userId?.includes(searchQuery) ||
+        u.userId?.toLowerCase().includes(query) ||
         u.phone?.includes(searchQuery)
       );
     }
@@ -381,8 +393,8 @@ export default function AdminUsers() {
 
                   {/* Timestamps */}
                   <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t">
-                    <p>Joined: {format(new Date(selectedUser.createdAt), 'PPpp')}</p>
-                    <p>Last Login: {format(new Date(selectedUser.lastSignedIn), 'PPpp')}</p>
+                    <p>Joined: {safeFormatDate(selectedUser.createdAt, 'PPpp')}</p>
+                    <p>Last Login: {safeFormatDate(selectedUser.lastSignedIn, 'PPpp')}</p>
                   </div>
                 </CardContent>
               </Card>
@@ -445,7 +457,7 @@ export default function AdminUsers() {
                               {Number(user.rating || 0).toFixed(1)}
                             </span>
                           </td>
-                          <td className="py-3 px-4 text-muted-foreground text-xs">{format(new Date(user.createdAt), 'PP')}</td>
+                          <td className="py-3 px-4 text-muted-foreground text-xs">{safeFormatDate(user.createdAt, 'PP')}</td>
                           <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
                             <Button variant="ghost" size="sm" onClick={() => handleUserClick(user)}>
                               <Eye className="h-4 w-4" />
