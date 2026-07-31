@@ -14,6 +14,9 @@ const paymentMethods = [
   { id: "bank", name: "Bank Transfer", color: "text-blue-500" },
 ];
 
+const USD_TO_BDT = 110; // 1 USD = 110 BDT
+const MIN_WITHDRAW_USD = 1; // Minimum withdrawal is 1 USD = ৳110 BDT
+
 export default function WithdrawPage() {
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
@@ -37,16 +40,19 @@ export default function WithdrawPage() {
   });
 
   const availableBalance = Number(balance?.earning || 0);
-  const minWithdraw = 500;
+  const availableBalanceUSD = availableBalance / USD_TO_BDT;
+  const minWithdrawBDT = MIN_WITHDRAW_USD * USD_TO_BDT;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (availableBalance < minWithdraw) {
-      toast.error(`Minimum withdrawal amount is ৳${minWithdraw}`);
+    const amountBDT = parseFloat(amount) * USD_TO_BDT;
+    
+    if (amountBDT < minWithdrawBDT) {
+      toast.error(`Minimum withdrawal is ${MIN_WITHDRAW_USD} USD (৳${minWithdrawBDT} BDT)`);
       return;
     }
-    if (parseFloat(amount) > availableBalance) {
+    if (amountBDT > availableBalance) {
       toast.error("Amount exceeds available balance");
       return;
     }
@@ -63,12 +69,17 @@ export default function WithdrawPage() {
   };
 
   const handleConfirm = () => {
+    // Convert USD to BDT
+    const amountBDT = parseFloat(amount) * USD_TO_BDT;
     withdraw.mutate({
-      amount: parseFloat(amount),
+      amount: amountBDT,
       paymentMethod,
       paymentNumber,
     });
   };
+
+  // Calculate BDT from USD
+  const amountBDT = (parseFloat(amount) || 0) * USD_TO_BDT;
 
   if (!emailVerified?.emailVerified) {
     return (
@@ -122,7 +133,8 @@ export default function WithdrawPage() {
         <CardContent className="p-6">
           <p className="text-emerald-100 text-sm">Available Balance</p>
           <p className="text-3xl font-bold mt-1">৳{availableBalance.toLocaleString('en-BD', { minimumFractionDigits: 0 })}</p>
-          <p className="text-xs text-emerald-200 mt-2">Minimum withdrawal: ৳{minWithdraw}</p>
+          <p className="text-sm text-emerald-200 mt-1">${availableBalanceUSD.toFixed(2)} USD</p>
+          <p className="text-xs text-emerald-200 mt-2">Minimum withdrawal: {MIN_WITHDRAW_USD} USD (৳{minWithdrawBDT} BDT)</p>
         </CardContent>
       </Card>
 
@@ -141,22 +153,31 @@ export default function WithdrawPage() {
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Withdrawal Amount */}
               <div className="space-y-2">
-                <label className="text-sm font-medium">Amount (৳) *</label>
+                <label className="text-sm font-medium">Amount (USD) *</label>
                 <div className="relative">
                   <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     type="number"
-                    placeholder={`Enter amount (min ৳${minWithdraw})`}
+                    placeholder={`Min: ${MIN_WITHDRAW_USD}`}
                     className="pl-10"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
-                    min={minWithdraw}
-                    max={availableBalance}
+                    min={MIN_WITHDRAW_USD}
+                    max={availableBalanceUSD}
+                    step="0.01"
                   />
                 </div>
-                {parseFloat(amount) > availableBalance && (
+                {amountBDT > 0 && (
+                  <p className="text-sm text-emerald-600 font-medium">
+                    = ৳{amountBDT.toLocaleString('en-BD')} BDT
+                  </p>
+                )}
+                {amountBDT > availableBalance && (
                   <p className="text-xs text-red-500">Amount exceeds available balance</p>
                 )}
+                <p className="text-xs text-muted-foreground">
+                  Minimum: {MIN_WITHDRAW_USD} USD (৳{minWithdrawBDT} BDT)
+                </p>
               </div>
 
               {/* Payment Method */}
@@ -196,8 +217,8 @@ export default function WithdrawPage() {
                 className="w-full bg-emerald-500 hover:bg-emerald-600"
                 disabled={
                   !amount || 
-                  parseFloat(amount) < minWithdraw || 
-                  parseFloat(amount) > availableBalance || 
+                  parseFloat(amount) < MIN_WITHDRAW_USD || 
+                  amountBDT > availableBalance || 
                   !paymentMethod || 
                   !paymentNumber ||
                   withdraw.isPending
@@ -222,8 +243,12 @@ export default function WithdrawPage() {
 
               <div className="space-y-3">
                 <div className="flex justify-between py-2 border-b">
-                  <span className="text-muted-foreground">Amount</span>
-                  <span className="font-bold">৳{parseFloat(amount).toLocaleString('en-BD')}</span>
+                  <span className="text-muted-foreground">Amount (USD)</span>
+                  <span className="font-bold">${parseFloat(amount).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between py-2 border-b">
+                  <span className="text-muted-foreground">Amount (BDT)</span>
+                  <span className="font-bold">৳{amountBDT.toLocaleString('en-BD')}</span>
                 </div>
                 <div className="flex justify-between py-2 border-b">
                   <span className="text-muted-foreground">Payment Method</span>

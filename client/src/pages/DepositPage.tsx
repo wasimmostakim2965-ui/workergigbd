@@ -15,7 +15,8 @@ const paymentMethods = [
 ];
 
 const ADMIN_BKASH = "01338882758";
-const MIN_DEPOSIT = 110; // 1 USD = 110 BDT
+const USD_TO_BDT = 110; // 1 USD = 110 BDT
+const MIN_DEPOSIT_USD = 1; // Minimum deposit is 1 USD
 
 export default function DepositPage() {
   const [amount, setAmount] = useState("");
@@ -45,10 +46,10 @@ export default function DepositPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    const amountNum = parseFloat(amount);
+    const amountUSD = parseFloat(amount);
     
-    if (!amount || amountNum < MIN_DEPOSIT) {
-      toast.error(`Minimum deposit amount is ৳${MIN_DEPOSIT} (1 USD)`);
+    if (!amount || amountUSD < MIN_DEPOSIT_USD) {
+      toast.error(`Minimum deposit amount is ${MIN_DEPOSIT_USD} USD (৳${MIN_DEPOSIT_USD * USD_TO_BDT} BDT)`);
       return;
     }
     if (!paymentMethod) {
@@ -68,19 +69,18 @@ export default function DepositPage() {
   };
 
   const handleConfirm = () => {
+    // Convert USD to BDT for the API
+    const amountBDT = parseFloat(amount) * USD_TO_BDT;
     requestDepositMutation.mutate({
-      amount: parseFloat(amount),
+      amount: amountBDT,
       paymentMethod,
       paymentNumber: userPhone,
       transactionId: transactionId.trim(),
     });
   };
 
-  // Calculate with 10% fee
-  const calculateAmount = () => {
-    const amountNum = parseFloat(amount) || 0;
-    return amountNum;
-  };
+  // Calculate BDT from USD
+  const amountBDT = (parseFloat(amount) || 0) * USD_TO_BDT;
 
   return (
     <div className="space-y-6">
@@ -100,8 +100,8 @@ export default function DepositPage() {
               <p className="font-medium">How to deposit:</p>
               <ol className="list-decimal list-inside mt-2 space-y-1 text-blue-700">
                 <li>Send money to <strong className="font-mono">{ADMIN_BKASH}</strong> using {paymentMethod || "your preferred method"}</li>
-                <li>Enter the amount, your phone number, and transaction ID</li>
-                <li>Minimum deposit: <strong>৳{MIN_DEPOSIT}</strong> (1 USD)</li>
+                <li>Enter the USD amount, your phone number, and transaction ID</li>
+                <li>Minimum deposit: <strong>{MIN_DEPOSIT_USD} USD</strong> (৳{MIN_DEPOSIT_USD * USD_TO_BDT} BDT)</li>
               </ol>
             </div>
           </div>
@@ -123,20 +123,26 @@ export default function DepositPage() {
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Payment Amount */}
               <div className="space-y-2">
-                <Label>Amount (৳) *</Label>
+                <Label>Amount (USD) *</Label>
                 <div className="relative">
                   <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     type="number"
-                    placeholder={`Min: ৳${MIN_DEPOSIT}`}
+                    placeholder={`Min: ${MIN_DEPOSIT_USD}`}
                     className="pl-10"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
-                    min={MIN_DEPOSIT}
+                    min={MIN_DEPOSIT_USD}
+                    step="0.01"
                   />
                 </div>
+                {amountBDT > 0 && (
+                  <p className="text-sm text-emerald-600 font-medium">
+                    = ৳{amountBDT.toLocaleString('en-BD')} BDT
+                  </p>
+                )}
                 <p className="text-xs text-muted-foreground">
-                  Minimum deposit: ৳{MIN_DEPOSIT} (1 USD)
+                  Minimum deposit: {MIN_DEPOSIT_USD} USD (৳{MIN_DEPOSIT_USD * USD_TO_BDT} BDT)
                 </p>
               </div>
 
@@ -193,10 +199,10 @@ export default function DepositPage() {
                 <div className="flex items-center gap-2">
                   <Phone className="h-4 w-4 text-muted-foreground" />
                   <span className="font-mono font-bold text-lg">{ADMIN_BKASH}</span>
-                  <span className="text-xs text-muted-foreground">(bKash)</span>
+                  <span className="text-xs text-muted-foreground">({paymentMethod || "bKash"})</span>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Send exactly ৳{amount || "0"} using your bKash account
+                <p className="text-sm font-medium text-amber-600">
+                  Send exactly ৳{amountBDT.toLocaleString('en-BD')} BDT ({amount || "0"} USD)
                 </p>
               </div>
 
@@ -224,8 +230,12 @@ export default function DepositPage() {
 
               <div className="space-y-3">
                 <div className="flex justify-between py-2 border-b">
-                  <span className="text-muted-foreground">Amount</span>
-                  <span className="font-bold">৳{parseFloat(amount).toLocaleString('en-BD')}</span>
+                  <span className="text-muted-foreground">Amount (USD)</span>
+                  <span className="font-bold">${parseFloat(amount).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between py-2 border-b">
+                  <span className="text-muted-foreground">Amount (BDT)</span>
+                  <span className="font-bold">৳{amountBDT.toLocaleString('en-BD')}</span>
                 </div>
                 <div className="flex justify-between py-2 border-b">
                   <span className="text-muted-foreground">Payment Method</span>
@@ -240,7 +250,7 @@ export default function DepositPage() {
                   <span className="font-mono">{transactionId}</span>
                 </div>
                 <div className="flex justify-between py-2 border-b">
-                  <span className="text-muted-foreground">Admin bKash</span>
+                  <span className="text-muted-foreground">Send to (Admin)</span>
                   <span className="font-mono font-bold">{ADMIN_BKASH}</span>
                 </div>
               </div>
