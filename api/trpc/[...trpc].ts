@@ -165,7 +165,12 @@ export const appRouter = router({
 
   // System
   system: router({
-    health: publicProcedure.query(() => ({ status: "ok", timestamp: new Date().toISOString() })),
+    health: publicProcedure.query(() => ({ 
+      status: "ok", 
+      timestamp: new Date().toISOString(),
+      version: "1.0.0",
+      environment: "production",
+    })),
   }),
 
   // AI
