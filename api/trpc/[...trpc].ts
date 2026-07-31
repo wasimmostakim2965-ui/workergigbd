@@ -319,9 +319,18 @@ export const appRouter = router({
       // Check deposits table
       try {
         const result = await query(`SELECT * FROM deposits LIMIT 5`);
+        // Also try inserting a test row
         return { deposits: result, success: true };
       } catch (error: any) {
         return { error: error.message, success: false };
+      }
+    }),
+    debugInsert: publicProcedure.mutation(async () => {
+      try {
+        await query(`INSERT INTO deposits ("userId", amount, "paymentMethod", "paymentNumber", "transactionId", status, "addedBy") VALUES (1, '999.00', 'test', '000', 'TEST123', 'pending', 1)`);
+        return { success: true };
+      } catch (error: any) {
+        return { error: error.message };
       }
     }),
     users: publicProcedure.query(async () => {
