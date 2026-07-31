@@ -113,6 +113,36 @@ export const appRouter = router({
         return { success: false, error: "Failed to create job" };
       }
     }),
+    update: publicProcedure.input(z.object({
+      id: z.number(),
+      title: z.string().optional(),
+      description: z.string().optional(),
+      category: z.string().optional(),
+      pay: z.union([z.number().min(0), z.string()]).optional(),
+      status: z.string().optional(),
+    })).mutation(async ({ input }) => {
+      try {
+        await query(
+          `UPDATE jobs SET title = COALESCE($1, title), description = COALESCE($2, description), category = COALESCE($3, category), pay = COALESCE($4, pay), status = COALESCE($5, status) WHERE id = $6`,
+          [input.title, input.description, input.category, input.pay ? String(input.pay) : null, input.status, input.id]
+        );
+        return { success: true };
+      } catch (error) {
+        console.error("[API] Update job error:", error);
+        return { success: false };
+      }
+    }),
+    delete: publicProcedure.input(z.object({
+      id: z.number(),
+    })).mutation(async ({ input }) => {
+      try {
+        await query(`DELETE FROM jobs WHERE id = $1`, [input.id]);
+        return { success: true };
+      } catch (error) {
+        console.error("[API] Delete job error:", error);
+        return { success: false };
+      }
+    }),
   }),
 
   // Auth
@@ -255,6 +285,27 @@ export const appRouter = router({
     }),
     userWithdrawals: publicProcedure.query(async () => {
       return await query(`SELECT * FROM "withdrawalRequests" ORDER BY "createdAt" DESC LIMIT 50`);
+    }),
+    requestDeposit: publicProcedure.input(z.object({
+      amount: z.union([z.number().positive(), z.string()]),
+      paymentMethod: z.string(),
+      paymentNumber: z.string(),
+      transactionId: z.string(),
+    })).mutation(async ({ input }) => {
+      try {
+        const amount = typeof input.amount === 'string' ? parseFloat(input.amount) : input.amount;
+        if (isNaN(amount) || amount <= 0) {
+          return { success: false, error: "Invalid amount" };
+        }
+        await query(
+          `INSERT INTO deposits ("userId", amount, "paymentMethod", "transactionId", status, "addedBy")
+           VALUES (1, '${amount}', '${input.paymentMethod}', '${input.transactionId}', 'pending', 1)`
+        );
+        return { success: true };
+      } catch (error: any) {
+        console.error("[API] Deposit error:", error);
+        return { success: false, error: error.message || "Failed to submit deposit request" };
+      }
     }),
     completeJob: publicProcedure.input(z.object({ jobId: z.number() })).mutation(async ({ input }) => {
       try {
@@ -402,6 +453,115 @@ export const appRouter = router({
       } catch (error) {
         console.error("[API] Update deposit error:", error);
         return { success: false };
+      }
+    }),
+    updateUser: publicProcedure.input(z.object({
+      id: z.number(),
+      name: z.string().optional(),
+      email: z.string().optional(),
+      role: z.string().optional(),
+      status: z.string().optional(),
+    })).mutation(async ({ input }) => {
+      try {
+        await query(`UPDATE users SET name = COALESCE($1, name), email = COALESCE($2, email), role = COALESCE($3, role), status = COALESCE($4, status) WHERE id = $5`, 
+          [input.name, input.email, input.role, input.status, input.id]);
+        return { success: true };
+      } catch (error) {
+        console.error("[API] Update user error:", error);
+        return { success: false };
+      }
+    }),
+    updateUserStatus: publicProcedure.input(z.object({
+      id: z.number(),
+      status: z.string(),
+    })).mutation(async ({ input }) => {
+      try {
+        await query(`UPDATE users SET status = $1 WHERE id = $2`, [input.status, input.id]);
+        return { success: true };
+      } catch (error) {
+        console.error("[API] Update user status error:", error);
+        return { success: false };
+      }
+    }),
+    addUserFunds: publicProcedure.input(z.object({
+      userId: z.number(),
+      amount: z.union([z.number().positive(), z.string()]),
+    })).mutation(async ({ input }) => {
+      try {
+        const amount = typeof input.amount === 'string' ? parseFloat(input.amount) : input.amount;
+        await query(
+          `INSERT INTO deposits ("userId", amount, "paymentMethod", "transactionId", status, "addedBy") VALUES ($1, $2, 'admin', 'admin-add', 'approved', 1)`,
+          [input.userId, amount]
+        );
+        return { success: true };
+      } catch (error) {
+        console.error("[API] Add user funds error:", error);
+        return { success: false };
+      }
+    }),
+    searchUsers: publicProcedure.input(z.object({
+      query: z.string(),
+    })).query(async ({ input }) => {
+      try {
+        return await query(`SELECT id, name, email, role, status, "createdAt" FROM users WHERE name ILIKE $1 OR email ILIKE $1 ORDER BY "createdAt" DESC LIMIT 20`, [`%${input.query}%`]);
+      } catch (error) {
+        console.error("[API] Search users error:", error);
+        return [];
+      }
+    }),
+    getUserDetails: publicProcedure.input(z.object({
+      id: z.number(),
+    })).query(async ({ input }) => {
+      try {
+        const users = await query(`SELECT id, name, email, role, status, phone, "createdAt" FROM users WHERE id = $1`, [input.id]);
+        const deposits = await query(`SELECT * FROM deposits WHERE "userId" = $1 ORDER BY "createdAt" DESC LIMIT 10`, [input.id]);
+        const withdrawals = await query(`SELECT * FROM "withdrawalRequests" WHERE "userId" = $1 ORDER BY "createdAt" DESC LIMIT 10`, [input.id]);
+        return { user: users[0] || null, deposits, withdrawals };
+      } catch (error) {
+        console.error("[API] Get user details error:", error);
+        return { user: null, deposits: [], withdrawals: [] };
+      }
+    }),
+    supportMessages: publicProcedure.query(async () => {
+      try {
+        return await query(`SELECT * FROM "supportMessages" ORDER BY "createdAt" DESC LIMIT 50`);
+      } catch (error) {
+        console.error("[API] Support messages error:", error);
+        return [];
+      }
+    }),
+    respondToSupport: publicProcedure.input(z.object({
+      id: z.number(),
+      response: z.string(),
+    })).mutation(async ({ input }) => {
+      try {
+        await query(`UPDATE "supportMessages" SET adminResponse = $1, "respondedAt" = NOW() WHERE id = $2`, [input.response, input.id]);
+        return { success: true };
+      } catch (error) {
+        console.error("[API] Respond to support error:", error);
+        return { success: false };
+      }
+    }),
+    createNotification: publicProcedure.input(z.object({
+      userId: z.number().optional(),
+      title: z.string(),
+      message: z.string(),
+    })).mutation(async ({ input }) => {
+      try {
+        await query(`INSERT INTO notifications (title, message, "userId", status) VALUES ($1, $2, $3, 'unread')`, 
+          [input.title, input.message, input.userId || null]);
+        return { success: true };
+      } catch (error) {
+        console.error("[API] Create notification error:", error);
+        return { success: false };
+      }
+    }),
+    logs: publicProcedure.query(async () => {
+      try {
+        return await query(`SELECT * FROM "adminLogs" ORDER BY "createdAt" DESC LIMIT 100`);
+      } catch (error) {
+        console.error("[API] Logs error:", error);
+        return [];
       }
     }),
   }),

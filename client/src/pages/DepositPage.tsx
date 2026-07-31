@@ -27,10 +27,10 @@ export default function DepositPage() {
 
   const utils = trpc.useUtils();
 
-  const requestDepositMutation = trpc.requestDeposit.useMutation({
+  const requestDepositMutation = trpc.earnings.requestDeposit.useMutation({
     onSuccess: () => {
       toast.success("Deposit request submitted! It will be reviewed by admin.");
-      utils.user.list.invalidate();
+      utils.earnings.list.invalidate();
       // Reset form
       setAmount("");
       setPaymentMethod("");
