@@ -116,9 +116,58 @@ export const appRouter = router({
   }),
 
   // Auth
+  // Top-level deposits router (matches frontend expectations)
+  deposits: router({
+    requestDeposit: publicProcedure.input(z.object({
+      amount: z.union([z.number().positive(), z.string()]),
+      paymentMethod: z.string(),
+      paymentNumber: z.string(),
+      transactionId: z.string(),
+    })).mutation(async ({ input }) => {
+      try {
+        const amount = typeof input.amount === 'string' ? parseFloat(input.amount) : input.amount;
+        if (isNaN(amount) || amount <= 0) {
+          return { success: false, error: "Invalid amount" };
+        }
+        await query(
+          `INSERT INTO deposits ("userId", amount, "paymentMethod", "transactionId", status, "addedBy")
+           VALUES (1, '${amount}', '${input.paymentMethod}', '${input.transactionId}', 'pending', 1)`
+        );
+        return { success: true };
+      } catch (error: any) {
+        console.error("[API] Deposit error:", error);
+        return { success: false, error: error.message || "Failed to submit deposit request" };
+      }
+    }),
+    list: publicProcedure.query(async () => {
+      return await query(`SELECT * FROM deposits ORDER BY "createdAt" DESC LIMIT 50`);
+    }),
+    getById: publicProcedure.input(z.object({ id: z.number() })).query(async ({ input }) => {
+      const result = await query(`SELECT * FROM deposits WHERE id = $1`, [input.id]);
+      return result[0] || null;
+    }),
+  }),
+
+  // Top-level user router (matches frontend expectations)
+  user: router({
+    list: publicProcedure.query(async () => {
+      return await query(`SELECT * FROM users ORDER BY "createdAt" DESC LIMIT 50`);
+    }),
+    getById: publicProcedure.input(z.object({ id: z.number() })).query(async ({ input }) => {
+      const result = await query(`SELECT * FROM users WHERE id = $1`, [input.id]);
+      return result[0] || null;
+    }),
+  }),
+
   auth: router({
     me: publicProcedure.query(async () => null),
     logout: publicProcedure.mutation(() => ({ success: true })),
+    verifyEmail: publicProcedure.input(z.object({ token: z.string() })).mutation(async ({ input }) => {
+      return { success: true };
+    }),
+    resendVerification: publicProcedure.mutation(async () => {
+      return { success: true };
+    }),
     register: publicProcedure.input(z.object({
       name: z.string().min(2),
       email: z.string().email(),
@@ -206,28 +255,6 @@ export const appRouter = router({
     }),
     userWithdrawals: publicProcedure.query(async () => {
       return await query(`SELECT * FROM "withdrawalRequests" ORDER BY "createdAt" DESC LIMIT 50`);
-    }),
-    requestDeposit: publicProcedure.input(z.object({
-      amount: z.union([z.number().positive(), z.string()]),
-      paymentMethod: z.string(),
-      paymentNumber: z.string().optional(),
-      transactionId: z.string(),
-    })).mutation(async ({ input }) => {
-      try {
-        const amount = typeof input.amount === 'string' ? parseFloat(input.amount) : input.amount;
-        if (isNaN(amount) || amount <= 0) {
-          return { success: false, error: "Invalid amount" };
-        }
-        // Insert without paymentNumber column
-        await query(
-          `INSERT INTO deposits ("userId", amount, "paymentMethod", "transactionId", status, "addedBy")
-           VALUES (1, '${amount}', '${input.paymentMethod}', '${input.transactionId}', 'pending', 1)`
-        );
-        return { success: true };
-      } catch (error: any) {
-        console.error("[API] Deposit error:", error);
-        return { success: false, error: error.message || "Failed to submit deposit request" };
-      }
     }),
     completeJob: publicProcedure.input(z.object({ jobId: z.number() })).mutation(async ({ input }) => {
       try {
