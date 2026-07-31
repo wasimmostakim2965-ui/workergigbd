@@ -7,7 +7,41 @@ import { createServer as createViteServer } from "vite";
 import viteConfig from "../../vite.config";
 import compression from "compression";
 
+// ─── Security Headers Middleware ───
+function addSecurityHeaders(req: express.Request, res: express.Response, next: express.NextFunction) {
+  // Prevent clickjacking
+  res.setHeader("X-Frame-Options", "DENY");
+  
+  // Prevent MIME type sniffing
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  
+  // XSS Protection
+  res.setHeader("X-XSS-Protection", "1; mode=block");
+  
+  // Referrer Policy
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  
+  // Permissions Policy
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  
+  // HSTS (only in production)
+  if (process.env.NODE_ENV === "production") {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+  
+  // Content Security Policy
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none';"
+  );
+  
+  next();
+}
+
 export async function setupVite(app: Express, server: Server) {
+  // Add security headers
+  app.use(addSecurityHeaders);
+  
   const serverOptions = {
     middlewareMode: true,
     hmr: { server },
@@ -56,6 +90,9 @@ export function serveStatic(app: Express) {
       `Could not find the build directory: ${distPath}, make sure to build the client first`
     );
   }
+
+  // Add security headers
+  app.use(addSecurityHeaders);
 
   // Enable gzip compression for all static assets
   app.use(compression());
