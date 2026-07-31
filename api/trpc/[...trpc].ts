@@ -75,14 +75,19 @@ export const appRouter = router({
   // Jobs
   jobs: router({
     list: publicProcedure
-      .input(z.object({ limit: z.number().default(20), offset: z.number().default(0) }))
+      .input(z.object({ 
+        limit: z.number().optional().default(20), 
+        offset: z.number().optional().default(0) 
+      }).optional())
       .query(async ({ input }) => {
+        const limit = input?.limit || 20;
+        const offset = input?.offset || 0;
         try {
           const client = await pool.connect();
           try {
             const result = await client.query(
               `SELECT * FROM jobs WHERE status = 'active' ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
-              [input.limit, input.offset]
+              [limit, offset]
             );
             return { jobs: result.rows, total: result.rows.length };
           } finally {
@@ -93,14 +98,19 @@ export const appRouter = router({
         }
       }),
     getAll: publicProcedure
-      .input(z.object({ limit: z.number().default(20), offset: z.number().default(0) }))
+      .input(z.object({ 
+        limit: z.number().optional().default(20), 
+        offset: z.number().optional().default(0) 
+      }).optional())
       .query(async ({ input }) => {
+        const limit = input?.limit || 20;
+        const offset = input?.offset || 0;
         try {
           const client = await pool.connect();
           try {
             const result = await client.query(
               `SELECT * FROM jobs WHERE status = 'active' ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
-              [input.limit, input.offset]
+              [limit, offset]
             );
             return { jobs: result.rows, total: result.rows.length };
           } finally {
