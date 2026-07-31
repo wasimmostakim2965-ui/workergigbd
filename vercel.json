@@ -5,12 +5,12 @@
   "framework": null,
   "rewrites": [
     {
-      "source": "/api/trpc/(.*)",
-      "destination": "/api/trpc/$1"
+      "source": "/api/trpc",
+      "destination": "/api/trpc"
     },
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "source": "/api/test",
+      "destination": "/api/test"
     }
   ],
   "headers": [
