@@ -12,14 +12,11 @@ const router = t.router;
 const publicProcedure = t.procedure;
 
 // ─── Database Configuration ───
-const databaseUrl = process.env.DATABASE_URL;
+const databaseUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
 
 // Create connection pool only if DATABASE_URL is available
 const pool = databaseUrl ? new Pool({
   connectionString: databaseUrl,
-  ssl: {
-    rejectUnauthorized: false, // Supabase uses self-signed certs
-  },
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
