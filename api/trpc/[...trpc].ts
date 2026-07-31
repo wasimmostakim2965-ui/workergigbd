@@ -31,6 +31,14 @@ async function verifySession(cookieValue: string | undefined | null): Promise<{ 
 
 // ─── Get session from request ───
 async function getSessionFromRequest(req: Request): Promise<{ openId: string; userId: number } | null> {
+  // First try Authorization header (Bearer token)
+  const authHeader = req.headers.get("Authorization");
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.substring(7);
+    return verifySession(token);
+  }
+  
+  // Then try cookie
   const cookieHeader = req.headers.get("cookie");
   if (!cookieHeader) return null;
   
