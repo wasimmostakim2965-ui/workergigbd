@@ -1,9 +1,18 @@
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
+import { useEffect } from "react";
 
 export default function PrivacyPage() {
   const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    document.title = "Privacy Policy - WorkerGigBD | How We Protect Your Data";
+    const metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc) metaDesc.setAttribute("content", "Read WorkerGigBD's Privacy Policy. Learn how we collect, use, and protect your personal information. Your data security is our priority.");
+    const canonical = document.querySelector('link[rel="canonical"]') as HTMLLinkElement;
+    if (canonical) canonical.href = "https://workergigbd.site/privacy";
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">

@@ -1,9 +1,18 @@
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
+import { useEffect } from "react";
 
 export default function TermsPage() {
   const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    document.title = "Terms & Conditions - WorkerGigBD | Micro-Task Freelancing Platform";
+    const metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc) metaDesc.setAttribute("content", "Read WorkerGigBD's Terms & Conditions. Learn about our platform rules, payment terms, user obligations, and governing laws for micro-task freelancing in Bangladesh.");
+    const canonical = document.querySelector('link[rel="canonical"]') as HTMLLinkElement;
+    if (canonical) canonical.href = "https://workergigbd.site/terms";
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">

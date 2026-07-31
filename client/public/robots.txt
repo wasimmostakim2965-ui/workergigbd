@@ -18,4 +18,4 @@ Disallow: /deposit-history
 Crawl-delay: 1
 
 # Sitemap location
-Sitemap: https://workergigbd.vercel.app/sitemap.xml
+Sitemap: https://workergigbd.site/sitemap.xml
