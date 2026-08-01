@@ -207,7 +207,7 @@ export default function Home() {
           {/* Logo */}
           <div className="flex items-center gap-2.5">
             <Avatar className="h-9 w-9">
-              <AvatarImage src="/manus-storage/workergigbd-logo_1438f192.png" />
+              <AvatarImage src="/storage/workergigbd-logo_1438f192.png" />
               <AvatarFallback className="bg-primary text-primary-foreground text-sm font-bold">
                 W
               </AvatarFallback>
@@ -572,7 +572,7 @@ export default function Home() {
             <div>
               <div className="flex items-center gap-2.5 mb-4">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src="/manus-storage/workergigbd-logo_1438f192.png" />
+                  <AvatarImage src="/storage/workergigbd-logo_1438f192.png" />
                   <AvatarFallback className="bg-emerald-600 text-white text-xs font-bold">
                     W
                   </AvatarFallback>

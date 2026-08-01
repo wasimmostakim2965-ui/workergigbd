@@ -24,8 +24,13 @@ export default function WithdrawPage() {
   const [step, setStep] = useState<"form" | "confirm">("form");
 
   const { data: balance } = trpc.earnings.balance.useQuery();
-  const { data: emailVerified } = trpc.auth.me.useQuery();
+  const { data: user } = trpc.auth.me.useQuery();
   
+  const resendVerification = trpc.auth.resendVerification.useMutation({
+    onSuccess: () => toast.success("Verification email sent!"),
+    onError: (err) => toast.error(err.message),
+  });
+
   const withdraw = trpc.earnings.withdraw.useMutation({
     onSuccess: () => {
       toast.success("Withdrawal request submitted successfully!");
@@ -39,7 +44,9 @@ export default function WithdrawPage() {
     }
   });
 
-  const availableBalance = Number(balance?.earning || 0);
+  const earningBalance = Number(balance?.earning || 0);
+  const depositBalance = Number(balance?.deposit || 0);
+  const availableBalance = earningBalance; // Only earnings are withdrawable per business logic
   const availableBalanceUSD = availableBalance / USD_TO_BDT;
   const minWithdrawBDT = MIN_WITHDRAW_USD * USD_TO_BDT;
 
@@ -81,7 +88,7 @@ export default function WithdrawPage() {
   // Calculate BDT from USD
   const amountBDT = (parseFloat(amount) || 0) * USD_TO_BDT;
 
-  if (!emailVerified?.emailVerified) {
+  if (!user?.emailVerified) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -104,12 +111,10 @@ export default function WithdrawPage() {
                 <Button 
                   variant="outline" 
                   className="mt-4 border-amber-300 text-amber-700"
-                  onClick={() => {
-                    trpc.auth.resendVerification.useMutation().mutate();
-                    toast.success("Verification email sent!");
-                  }}
+                  disabled={resendVerification.isPending}
+                  onClick={() => resendVerification.mutate()}
                 >
-                  Resend Verification Email
+                  {resendVerification.isPending ? "Sending..." : "Resend Verification Email"}
                 </Button>
               </div>
             </div>

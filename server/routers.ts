@@ -203,7 +203,7 @@ export const appRouter = router({
 
     completeJob: protectedProcedure.input(z.object({ jobId: z.number() })).mutation(async ({ input, ctx }) => {
       const job = await db.getJobById(input.jobId);
-      if (!job) throw new Error("Job not found");
+      if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
       
       await db.addEarningRecord({
         userId: ctx.user.id,
@@ -213,13 +213,10 @@ export const appRouter = router({
       });
       await db.addEarning(ctx.user.id, Number(job.pay));
       
-      // Send notification to user about job completion
-      await db.createNotification({
-        userId: ctx.user.id,
-        title: "🎉 Job Completed - Payment Earned!",
-        message: `Congratulations! You earned ৳${job.pay} for completing "${job.title}".`,
-        type: "earning",
-      });
+      // Notification is already sent by addEarningRecord if status is completed,
+      // but we can add a more specific one here if needed. 
+      // The current implementation in db.ts addEarningRecord already sends a notification.
+      // So I will remove the duplicate one from here to be professional.
       
       return { success: true };
     }),
@@ -235,16 +232,25 @@ export const appRouter = router({
           message: "Please verify your email before requesting a withdrawal",
         });
       }
-      
+
+      const balance = await db.getUserBalance(ctx.user.id);
       const amount = Number(input.amount);
+      const availableBalance = Number(balance?.earning || 0);
+
+      if (amount > availableBalance) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Insufficient balance. Available: ৳${availableBalance}`,
+        });
+      }
+      
       await db.createWithdrawalRequest({
         userId: ctx.user.id,
-        amount: String(amount),
+        amount: String(amount.toFixed(3)),
         paymentMethod: input.paymentMethod,
         paymentNumber: input.paymentNumber,
       });
       
-      // Send notification to user about withdrawal request
       await db.createNotification({
         userId: ctx.user.id,
         title: "💰 Withdrawal Request Submitted",

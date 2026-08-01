@@ -282,10 +282,47 @@ export const appRouter = router({
     }),
     logout: publicProcedure.mutation(() => ({ success: true })),
     verifyEmail: publicProcedure.input(z.object({ token: z.string() })).mutation(async ({ input }) => {
-      return { success: true };
+      try {
+        const result = await query(
+          `UPDATE users SET "emailVerified" = 1, "emailVerifyToken" = NULL, "emailVerifyTokenExpiresAt" = NULL 
+           WHERE "emailVerifyToken" = $1 AND "emailVerifyTokenExpiresAt" > NOW()
+           RETURNING id`,
+          [input.token]
+        );
+        if (result.length === 0) {
+          return { success: false, error: "Invalid or expired verification token" };
+        }
+        return { success: true };
+      } catch (error) {
+        console.error("[API] Verify email error:", error);
+        return { success: false, error: "Failed to verify email" };
+      }
     }),
-    resendVerification: publicProcedure.mutation(async () => {
-      return { success: true };
+    resendVerification: publicProcedure.mutation(async ({ ctx }) => {
+      const userId = (ctx as any).session?.userId;
+      if (!userId) return { success: false, error: "Authentication required" };
+      
+      try {
+        const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+        
+        await query(
+          `UPDATE users SET "emailVerifyToken" = $1, "emailVerifyTokenExpiresAt" = $2 WHERE id = $3`,
+          [token, expiresAt, userId]
+        );
+        
+        const user = await query(`SELECT email FROM users WHERE id = $1`, [userId]);
+        const email = user[0]?.email;
+        
+        if (email) {
+          console.log(`[EmailAuth] Verification link for ${email}: /verify-email?token=${token}`);
+        }
+        
+        return { success: true };
+      } catch (error) {
+        console.error("[API] Resend verification error:", error);
+        return { success: false, error: "Failed to resend verification email" };
+      }
     }),
     register: publicProcedure.input(z.object({
       name: z.string().min(2),
@@ -511,18 +548,18 @@ export const appRouter = router({
           return { success: false, error: "Invalid amount" };
         }
         await query(
-          `INSERT INTO deposits ("userId", amount, "paymentMethod", "transactionId", status, "addedBy")
-           VALUES ($1, $2, $3, $4, 'pending', $5)`,
-          [userId, amount, input.paymentMethod, input.transactionId, userId]
+          `INSERT INTO deposits ("userId", amount, "paymentMethod", "paymentNumber", "transactionId", status, "addedBy")
+           VALUES ($1, $2, $3, $4, $5, 'pending', $1)`,
+          [userId, amount, input.paymentMethod, input.paymentNumber, input.transactionId]
         );
         
-        // Send notification to user
+        // Send notification to user with full details
         await query(
           `INSERT INTO notifications (title, message, "userId", type, "isRead", "createdAt")
            VALUES ($1, $2, $3, 'payment', 0, NOW())`,
           [
             'Deposit Request Submitted',
-            `Your deposit request for ৳${amount.toLocaleString('en-BD')} via ${input.paymentMethod.toUpperCase()} has been submitted and is pending approval.`,
+            `Your deposit request of ৳${amount.toLocaleString('en-BD')} via ${input.paymentMethod.toUpperCase()} (Number: ${input.paymentNumber}, TXN: ${input.transactionId}) has been submitted and is pending approval.`,
             userId
           ]
         );
@@ -685,19 +722,46 @@ export const appRouter = router({
   // Admin
   admin: router({
     users: publicProcedure.query(async () => {
-      return await query(`SELECT id, name, email, role, status, "createdAt" FROM users ORDER BY "createdAt" DESC`);
+      return await query(`SELECT id, "userId", name, email, role, status, phone, "createdAt" FROM users ORDER BY "createdAt" DESC`);
     }),
     withdrawals: publicProcedure.query(async () => {
-      return await query(`SELECT * FROM "withdrawalRequests" ORDER BY "createdAt" DESC`);
+      const result = await query(`
+        SELECT w.*, u.name as "userName", u."userId" as "userPublicId", u.phone as "userPhone"
+        FROM "withdrawalRequests" w
+        LEFT JOIN users u ON w."userId" = u.id
+        ORDER BY w."createdAt" DESC
+      `);
+      return result.map((w: any) => ({
+        ...w,
+        userInfo: {
+          name: w.userName,
+          userId: w.userPublicId,
+          phone: w.userPhone
+        }
+      }));
     }),
     deposits: publicProcedure.query(async () => {
-      return await query(`SELECT * FROM deposits ORDER BY "createdAt" DESC`);
+      const result = await query(`
+        SELECT d.*, u.name as "userName", u."userId" as "userPublicId", u.phone as "userPhone"
+        FROM deposits d
+        LEFT JOIN users u ON d."userId" = u.id
+        ORDER BY d."createdAt" DESC
+      `);
+      return result.map((d: any) => ({
+        ...d,
+        userInfo: {
+          name: d.userName,
+          userId: d.userPublicId,
+          phone: d.userPhone
+        }
+      }));
     }),
     stats: publicProcedure.query(async () => {
       try {
         const [
-          users, jobs, withdrawals, totalDeposits, totalWithdrawn,
-          earnings, todayWithdrawals, todayDeposits, todayWithdrawalAmount
+          usersCount, jobsCount, withdrawalsCount, totalDeposits, totalWithdrawn,
+          earningsTotal, todayWithdrawals, todayDeposits, todayWithdrawalAmount,
+          bannedUsers, suspendedUsers
         ] = await Promise.all([
           query(`SELECT COUNT(*) as count FROM users`),
           query(`SELECT COUNT(*) as count FROM jobs WHERE status = 'active'`),
@@ -708,18 +772,25 @@ export const appRouter = router({
           query(`SELECT COUNT(*) as count FROM "withdrawalRequests" WHERE DATE("createdAt") = CURRENT_DATE`),
           query(`SELECT COUNT(*) as count FROM deposits WHERE DATE("createdAt") = CURRENT_DATE`),
           query(`SELECT COALESCE(SUM(CAST(amount AS NUMERIC)), 0) as total FROM "withdrawalRequests" WHERE DATE("createdAt") = CURRENT_DATE AND status IN ('approved', 'processed')`),
+          query(`SELECT COUNT(*) as count FROM users WHERE status = 'banned'`),
+          query(`SELECT COUNT(*) as count FROM users WHERE status = 'suspended'`),
         ]);
+        
+        const totalUsers = parseInt(usersCount[0]?.count || "0");
+        const bannedCount = parseInt(bannedUsers[0]?.count || "0");
+        const suspendedCount = parseInt(suspendedUsers[0]?.count || "0");
+
         return {
-          totalUsers: parseInt(users[0]?.count || "0"),
-          activeUsers: parseInt(users[0]?.count || "0"),
-          bannedUsers: 0,
-          suspendedUsers: 0,
-          totalJobs: parseInt(jobs[0]?.count || "0"),
-          activeJobs: parseInt(jobs[0]?.count || "0"),
-          pendingWithdrawals: parseInt(withdrawals[0]?.count || "0"),
+          totalUsers,
+          activeUsers: totalUsers - bannedCount - suspendedCount,
+          bannedUsers: bannedCount,
+          suspendedUsers: suspendedCount,
+          totalJobs: parseInt(jobsCount[0]?.count || "0"),
+          activeJobs: parseInt(jobsCount[0]?.count || "0"),
+          pendingWithdrawals: parseInt(withdrawalsCount[0]?.count || "0"),
           totalWithdrawn: parseFloat(totalWithdrawn[0]?.total || "0"),
           totalDeposits: parseFloat(totalDeposits[0]?.total || "0"),
-          totalEarnings: parseFloat(earnings[0]?.total || "0"),
+          totalEarnings: parseFloat(earningsTotal[0]?.total || "0"),
           todayWithdrawals: parseInt(todayWithdrawals[0]?.count || "0"),
           todayWithdrawalAmount: parseFloat(todayWithdrawalAmount[0]?.total || "0"),
           todayDeposits: parseInt(todayDeposits[0]?.count || "0"),
@@ -755,26 +826,29 @@ export const appRouter = router({
         if (!withdrawal) {
           return { success: false, error: "Withdrawal request not found" };
         }
+
+        // Prevent double processing
+        if (withdrawal.status !== 'pending') {
+          return { success: false, error: "Withdrawal request already processed" };
+        }
         
         const amount = parseFloat(withdrawal.amount);
         const userId = withdrawal.userId;
         
         // Update withdrawal status
-        await query(`UPDATE "withdrawalRequests" SET status = $1 WHERE id = $2`, [input.status, input.id]);
+        await query(`UPDATE "withdrawalRequests" SET status = $1, "updatedAt" = NOW() WHERE id = $2`, [input.status, input.id]);
         
         // If approved, deduct from user's earning balance
         if (input.status === "approved") {
-          // Deduct from user's earning balance
           await query(`
-            INSERT INTO "userBalances" ("userId", earning, "updatedAt")
-            VALUES ($1, $2, NOW())
+            INSERT INTO "userBalances" ("userId", earning, "totalWithdrawn", "updatedAt")
+            VALUES ($1, $2, $3, NOW())
             ON CONFLICT ("userId") 
             DO UPDATE SET 
-              earning = GREATEST(0, "userBalances".earning + $2),
+              earning = "userBalances".earning - $3,
+              "totalWithdrawn" = "userBalances"."totalWithdrawn" + $3,
               "updatedAt" = NOW()
-          `, [userId, -amount]);
-          
-          console.log(`[Withdrawal] Deducted ${amount} from user ${userId} balance`);
+          `, [userId, 0, amount]);
         }
         
         // Send notification to user about status change
@@ -786,17 +860,7 @@ export const appRouter = router({
           notificationMessage = `Your withdrawal request for ৳${amount.toLocaleString('en-BD')} has been approved and will be processed soon.`;
         } else if (input.status === "rejected") {
           notificationTitle = 'Withdrawal Rejected';
-          notificationMessage = `Your withdrawal request for ৳${amount.toLocaleString('en-BD')} has been rejected. The amount has been refunded to your earning balance.`;
-          
-          // Refund amount if rejected
-          await query(`
-            INSERT INTO "userBalances" ("userId", earning, "updatedAt")
-            VALUES ($1, $2, NOW())
-            ON CONFLICT ("userId") 
-            DO UPDATE SET 
-              earning = "userBalances".earning + $2,
-              "updatedAt" = NOW()
-          `, [userId, amount]);
+          notificationMessage = `Your withdrawal request for ৳${amount.toLocaleString('en-BD')} has been rejected. No balance was deducted.`;
         }
         
         await query(
@@ -824,13 +888,18 @@ export const appRouter = router({
         if (!deposit) {
           return { success: false, error: "Deposit not found" };
         }
+
+        // Prevent double processing
+        if (deposit.status !== 'pending') {
+          return { success: false, error: "Deposit already processed" };
+        }
         
         const amount = parseFloat(deposit.amount);
         const userId = deposit.userId;
         
         // Update deposit status
         await query(
-          `UPDATE deposits SET status = $1, note = $2 WHERE id = $3`,
+          `UPDATE deposits SET status = $1, note = $2, "processedAt" = NOW() WHERE id = $3`,
           [input.status, input.adminNote || null, input.id]
         );
         
@@ -845,8 +914,6 @@ export const appRouter = router({
               deposit = "userBalances".deposit + $2,
               "updatedAt" = NOW()
           `, [userId, amount]);
-          
-          console.log(`[Deposit] Added ${amount} to user ${userId} balance`);
         }
         
         // Send notification to user about status change

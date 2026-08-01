@@ -271,9 +271,18 @@ export async function initUserBalance(userId: number) {
 export async function addEarning(userId: number, amount: number) {
   const db = await getDb();
   if (!db) return;
-  await db.insert(userBalances).values({ userId, earning: String(amount) }).onConflictDoUpdate({
-    target: userBalances.userId,
-    set: { earning: sql`${userBalances.earning} + ${amount}` },
+  
+  await db.transaction(async (tx) => {
+    await tx.insert(userBalances).values({ 
+      userId, 
+      earning: String(amount.toFixed(3)) 
+    }).onConflictDoUpdate({
+      target: userBalances.userId,
+      set: { 
+        earning: sql`CAST(${userBalances.earning} AS DECIMAL(10,3)) + ${amount}`,
+        updatedAt: new Date(),
+      },
+    });
   });
 }
 
@@ -399,40 +408,51 @@ export async function updateWithdrawalStatus(id: number, status: "pending" | "ap
   const db = await getDb();
   if (!db) return;
   
-  // Get withdrawal info first
-  const withdrawalResult = await db.select().from(withdrawalRequests).where(eq(withdrawalRequests.id, id)).limit(1);
-  const withdrawal = withdrawalResult[0];
-  
-  await db.update(withdrawalRequests).set({
-    status,
-    adminNote: adminNote || null,
-    processedAt: new Date(),
-  }).where(eq(withdrawalRequests.id, id));
-  
-  // Send notification if withdrawal was approved
-  if (withdrawal && (status === "approved" || status === "processed")) {
-    await createNotification({
-      userId: withdrawal.userId,
-      title: "Withdrawal Approved",
-      message: `Your withdrawal request of ৳${withdrawal.amount} has been approved. Payment will be sent to ${withdrawal.paymentNumber} via ${withdrawal.paymentMethod}.`,
-      type: "payment",
-    });
+  await db.transaction(async (tx) => {
+    // Get withdrawal info first
+    const withdrawalResult = await tx.select().from(withdrawalRequests).where(eq(withdrawalRequests.id, id)).limit(1);
+    const withdrawal = withdrawalResult[0];
     
-    // Deduct from user earning balance
-    await db.insert(userBalances).values({
-      userId: withdrawal.userId,
-      earning: String(-Number(withdrawal.amount)),
-    }).onConflictDoUpdate({
-      target: userBalances.userId,
-      set: { earning: sql`${userBalances.earning} - ${withdrawal.amount}` },
-    });
+    if (!withdrawal) return;
+
+    await tx.update(withdrawalRequests).set({
+      status,
+      adminNote: adminNote || null,
+      processedAt: new Date(),
+    }).where(eq(withdrawalRequests.id, id));
     
-    await logActivity({
-      userId: withdrawal.userId,
-      action: "WITHDRAWAL_APPROVED",
-      details: `Withdrawal of ৳${withdrawal.amount} approved via ${withdrawal.paymentMethod}`,
-    });
-  } else if (withdrawal && status === "rejected") {
+    // Send notification if withdrawal was approved
+    if (status === "approved" || status === "processed") {
+      // Only deduct balance if it wasn't already processed/approved
+      if (withdrawal.status === "pending") {
+        // Deduct from user earning balance and update totalWithdrawn
+        await tx.insert(userBalances).values({
+          userId: withdrawal.userId,
+          earning: "0.000",
+          totalWithdrawn: withdrawal.amount,
+        }).onConflictDoUpdate({
+          target: userBalances.userId,
+          set: { 
+            earning: sql`CAST(${userBalances.earning} AS DECIMAL(10,3)) - ${withdrawal.amount}`,
+            totalWithdrawn: sql`CAST(${userBalances.totalWithdrawn} AS DECIMAL(10,3)) + ${withdrawal.amount}`,
+            updatedAt: new Date(),
+          },
+        });
+
+        await createNotification({
+          userId: withdrawal.userId,
+          title: "Withdrawal Approved",
+          message: `Your withdrawal request of ৳${withdrawal.amount} has been approved. Payment will be sent to ${withdrawal.paymentNumber} via ${withdrawal.paymentMethod}.`,
+          type: "payment",
+        });
+        
+        await logActivity({
+          userId: withdrawal.userId,
+          action: "WITHDRAWAL_APPROVED",
+          details: `Withdrawal of ৳${withdrawal.amount} approved via ${withdrawal.paymentMethod}`,
+        });
+      }
+    } else if (status === "rejected") {
     await createNotification({
       userId: withdrawal.userId,
       title: "Withdrawal Rejected",
@@ -913,50 +933,54 @@ export async function updateDepositStatus(id: number, status: "pending" | "appro
   const db = await getDb();
   if (!db) return;
   
-  // Get deposit info first
-  const depositResult = await db.select().from(deposits).where(eq(deposits.id, id)).limit(1);
-  const deposit = depositResult[0];
-  
-  if (!deposit) return;
-  
-  // Update deposit status
-  await db.update(deposits)
-    .set({ 
-      status,
-      note: adminNote || undefined,
-      processedBy: processedBy,
-      processedAt: new Date(),
-    })
-    .where(eq(deposits.id, id));
-  
-  // If approved, add to user balance
-  if (status === "approved") {
-    const amount = Number(deposit.amount);
+  await db.transaction(async (tx) => {
+    // Get deposit info first
+    const depositResult = await tx.select().from(deposits).where(eq(deposits.id, id)).limit(1);
+    const deposit = depositResult[0];
     
-    // Update user balance
-    await db.insert(userBalances).values({
-      userId: deposit.userId,
-      deposit: String(amount),
-    }).onConflictDoUpdate({
-      target: userBalances.userId,
-      set: { deposit: sql`${userBalances.deposit} + ${amount}` },
-    });
+    if (!deposit) return;
     
-    // Log activity
-    await logActivity({
-      userId: deposit.userId,
-      action: "DEPOSIT_APPROVED",
-      details: `Deposit approved: ৳${amount} via ${deposit.paymentMethod}, TXN: ${deposit.transactionId || "N/A"}`,
-    });
+    // Update deposit status
+    await tx.update(deposits)
+      .set({ 
+        status,
+        note: adminNote || undefined,
+        processedBy: processedBy,
+        processedAt: new Date(),
+      })
+      .where(eq(deposits.id, id));
     
-    // Send notification
-    await createNotification({
-      userId: deposit.userId,
-      title: "Deposit Approved",
-      message: `Your deposit of ৳${amount} has been approved and added to your account.`,
-      type: "payment",
-    });
-  } else if (status === "rejected") {
+    // If approved, add to user balance
+    if (status === "approved" && deposit.status === "pending") {
+      const amount = Number(deposit.amount);
+      
+      // Update user balance
+      await tx.insert(userBalances).values({
+        userId: deposit.userId,
+        deposit: String(amount.toFixed(3)),
+      }).onConflictDoUpdate({
+        target: userBalances.userId,
+        set: { 
+          deposit: sql`CAST(${userBalances.deposit} AS DECIMAL(10,3)) + ${amount}`,
+          updatedAt: new Date(),
+        },
+      });
+      
+      // Log activity
+      await logActivity({
+        userId: deposit.userId,
+        action: "DEPOSIT_APPROVED",
+        details: `Deposit approved: ৳${amount} via ${deposit.paymentMethod}, TXN: ${deposit.transactionId || "N/A"}`,
+      });
+      
+      // Send notification
+      await createNotification({
+        userId: deposit.userId,
+        title: "Deposit Approved",
+        message: `Your deposit of ৳${amount} has been approved and added to your account.`,
+        type: "payment",
+      });
+    } else if (status === "rejected") {
     // Log activity
     await logActivity({
       userId: deposit.userId,

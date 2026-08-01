@@ -20,7 +20,7 @@ export default function LoginPage() {
       if (data.token) {
         // Store in sessionStorage for API header (matching main.tsx expectation)
         try {
-          sessionStorage.setItem("manus-cookie", `${data.token}`);
+          sessionStorage.setItem("app_session_token", `${data.token}`);
         } catch {}
       }
       await utils.auth.me.invalidate();

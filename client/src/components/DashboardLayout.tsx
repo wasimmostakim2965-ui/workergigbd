@@ -122,7 +122,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <SheetHeader className="pb-4">
                 <div className="flex items-center gap-3 px-2">
                   <Avatar className="h-12 w-12">
-                    <AvatarImage src="/manus-storage/workergigbd-logo_1438f192.png" />
+                    <AvatarImage src="/storage/workergigbd-logo_1438f192.png" />
                     <AvatarFallback className="bg-emerald-600 text-white text-lg font-bold">
                       W
                     </AvatarFallback>
@@ -278,7 +278,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Avatar className="h-9 w-9 border-2 border-white/40 shadow-sm cursor-pointer hover:border-emerald-400 transition-colors">
-                  <AvatarImage src="/manus-storage/workergigbd-logo_1438f192.png" />
+                  <AvatarImage src="/storage/workergigbd-logo_1438f192.png" />
                   <AvatarFallback className="bg-emerald-600 text-white text-sm font-bold">
                     {userName.charAt(0).toUpperCase()}
                   </AvatarFallback>
